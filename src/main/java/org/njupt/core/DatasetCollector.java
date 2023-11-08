@@ -25,6 +25,14 @@ public class DatasetCollector {
 
     public static final Logger logger = LoggerFactory.getLogger(DatasetCollector.class);
 
+    public static final String JavaDirectory = "G:/now/2024merge/MergeBERT_Data/fse2022/automated-analysis-data/Java/";
+
+    public static final String CSharpDirectory = "G:/now/2024merge/MergeBERT_Data/fse2022/automated-analysis-data/CSharp/";
+
+    public static final String JavaScriptDirectory = "G:/now/2024merge/MergeBERT_Data/fse2022/automated-analysis-data/JavaScript/";
+
+    public static final String TypeScriptDirectory = "G:/now/2024merge/MergeBERT_Data/fse2022/automated-analysis-data/TypeScript/";
+
     /**
      * Extract conflict tuples from every x_metadata.json file (according to MergeBERT)
      * @param jsonPath one x_metadata.json file path
@@ -116,7 +124,7 @@ public class DatasetCollector {
                 }
             });
         } else {
-            logger.error("Code not parsed correctly!\n{}", code);
+            logger.error("Code not parsed correctly! ******************************************************\n{}", code);
         }
         return tokenList;
     }
@@ -217,8 +225,79 @@ public class DatasetCollector {
         }
     }
 
+    /**
+     * Customized calculation of perfect match rate. (Note: This calculation is not accurate and can only calculate a perfect match!)
+     * @param ours ours code
+     * @param target target code
+     * @return
+     */
+    private Double perfectMatchRate(String ours, String target){
+        List<String> oursTokens  = new ArrayList<>();
+        List<String> targetTokens  = new ArrayList<>();
 
+        ours = ours.replace("\n", " ");
+        target = target.replace("\n", " ");
 
+        //USE JavaParser tokenize code.
+        JavaParser javaParser = new JavaParser(new ParserConfiguration().setSymbolResolver(new JavaSymbolSolver(new ReflectionTypeSolver())));
+        Optional<CompilationUnit> compilationUnitOurs = javaParser.parse(ours).getResult();
+        Optional<CompilationUnit> compilationUnitTarget = javaParser.parse(target).getResult();
+        if (compilationUnitOurs.isPresent()) {
+            TokenRange tokenRange = compilationUnitOurs.get().getTokenRange().get();
+            tokenRange.forEach(token -> {
+                if (!Objects.equals(token.getText().replaceAll("\\s*",""), "")){
+                    oursTokens.add(token.getText());
+                }
+            });
+        } else {
+            logger.error("Code not parsed correctly! here:\n{}", ours);
+        }if (compilationUnitTarget.isPresent()) {
+            TokenRange tokenRange = compilationUnitTarget.get().getTokenRange().get();
+            tokenRange.forEach(token -> {
+                if (!Objects.equals(token.getText().replaceAll("\\s*",""), "")){
+                    targetTokens.add(token.getText());
+                }
+            });
+        } else {
+            logger.error("Code not parsed correctly! here:\n{}", target);
+        }
+
+        //make them change to be same length.
+        if (oursTokens.size() < targetTokens.size()){
+            return (double) oursTokens.size() / targetTokens.size();//Note: this is false; It shouldn't be calculated like this
+        }else if (oursTokens.size() > targetTokens.size()){
+            return (double) targetTokens.size() / oursTokens.size();//Note: this is false; It shouldn't be calculated like this
+        }else {
+            int count = 0;
+            for (int i = 0; i < oursTokens.size(); i++){
+                if (Objects.equals(oursTokens.get(i), targetTokens.get(i))) count++;
+            }
+            return (double) count / oursTokens.size() * 100;
+        }
+    }
+
+    /**
+     * Official Code perfect matching rate.
+     */
+    private Double officialPerfectMatchRate(String ours, String target){
+
+        return 100.00;
+    }
+
+    /**
+     * Merge token-level conflicts across the entire directory.
+     * @param directory json directory
+     */
+    public void allTuplesToTokenDiff(String directory) throws JSONException, IOException {
+        File files = new File(directory);
+        String[] list = files.list();
+        for (String fileName : list){
+            if (fileName.endsWith(".json")){
+                System.out.println(fileName);
+                fromTupleToTokenDiff(directory, fileName);
+            }
+        }
+    }
 
 
 
@@ -232,8 +311,17 @@ public class DatasetCollector {
 //        collector.fromTupleToTokenDiff(dir, "100004_metadata.json");
 //        collector.fromTupleToTokenDiff(dir, "100034_metadata.json");
 //        collector.fromTupleToTokenDiff(dirB, "106855_metadata.json");
-        collector.fromTupleToTokenDiff(dirBA, "101216_metadata.json");
-        collector.fromTupleToTokenDiff(dirBA, "140328_metadata.json");
+//        collector.fromTupleToTokenDiff(dirBA, "101216_metadata.json");
+//        collector.fromTupleToTokenDiff(dirBA, "140328_metadata.json");
+//        System.out.println(collector.perfectMatchRate("\n" +
+//                " private final static IngestServices ingestServices = IngestServices . getInstance ( ) ; \n" +
+//                " private final static Logger logger = ingestServices . getLogger ( SQLiteReader . class . getName ( ) ) ; \n" +
+//                " \n" +
+//                " ", "    public final static IngestServices ingestServices = IngestServices.getInstance();\n    private final static Logger logger = ingestServices.getLogger(SQLiteReader.class.getName());\n    \n"));
+
+        collector.allTuplesToTokenDiff("G:/now/2024merge/ChatGPTResearch/exampleData/acceptB/");
+
+
 
 //        System.out.println(collector.tokenize("/**\n" +
 //                "     * Select an actor in a Human task in the list of Process Actor\n" +

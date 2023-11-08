@@ -3,6 +3,12 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>2.4.4</version>
+    <relativePath/> <!-- lookup parent from repository -->
+  </parent>
 
   <groupId>org.njupt</groupId>
   <artifactId>mergeMine</artifactId>
@@ -19,6 +25,43 @@
   </properties>
 
   <dependencies>
+
+<!--    &lt;!&ndash;Druid&ndash;&gt;-->
+<!--    <dependency>-->
+<!--      <groupId>com.alibaba</groupId>-->
+<!--      <artifactId>druid</artifactId>-->
+<!--      <version>1.1.18</version>-->
+<!--    </dependency>-->
+
+<!--    &lt;!&ndash;mysql&ndash;&gt;-->
+<!--    <dependency>-->
+<!--      <groupId>mysql</groupId>-->
+<!--      <artifactId>mysql-connector-java</artifactId>-->
+<!--      <scope>runtime</scope>-->
+<!--    </dependency>-->
+
+<!--    &lt;!&ndash;jdbc&ndash;&gt;-->
+<!--    <dependency>-->
+<!--      <groupId>org.springframework.boot</groupId>-->
+<!--      <artifactId>spring-boot-starter-jdbc</artifactId>-->
+<!--    </dependency>-->
+
+<!--    &lt;!&ndash;thymeleaf&ndash;&gt;-->
+<!--    <dependency>-->
+<!--      <groupId>org.thymeleaf</groupId>-->
+<!--      <artifactId>thymeleaf-spring5</artifactId>-->
+<!--    </dependency>-->
+<!--    <dependency>-->
+<!--      <groupId>org.thymeleaf.extras</groupId>-->
+<!--      <artifactId>thymeleaf-extras-java8time</artifactId>-->
+<!--    </dependency>-->
+
+<!--    &lt;!&ndash;mybatis&ndash;&gt;-->
+<!--    <dependency>-->
+<!--      <groupId>org.mybatis.spring.boot</groupId>-->
+<!--      <artifactId>mybatis-spring-boot-starter</artifactId>-->
+<!--      <version>2.1.1</version>-->
+<!--    </dependency>-->
 
     <dependency>
       <groupId>junit</groupId>
@@ -64,15 +107,7 @@
       <version>3.25.5</version>
     </dependency>
 
-
-
-
-
-
-
   </dependencies>
-
-
 
   <build>
     <pluginManagement><!-- lock down plugins versions to avoid using Maven defaults (may be moved to parent pom) -->
