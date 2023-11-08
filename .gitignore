@@ -1,0 +1,30 @@
+## .gitignore for intellij
+ 
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# logs
+/stacktrace.log
+/test/reports
+/logs
+*.log
+*.log.*
+
+# .gitignore for maven 
+target/
+*.releaseBackup
+
+# web application files
+#/web-app/WEB-INF
+ 
+# IDE support files
+/.classpath
+/.launch
+/.project
+/.settings
+/*.launch
+/*.tmproj
+/ivy*
+/eclipse
