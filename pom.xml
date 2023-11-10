@@ -46,12 +46,6 @@
       <version>8.11.1</version>
     </dependency>
 
-    <dependency>
-      <groupId>com.github.magese</groupId>
-      <artifactId>ik-analyzer</artifactId>
-      <version>8.5.0</version>
-    </dependency>
-
     <!--    Use to Similarity matching for strings-->
     <dependency>
       <groupId>org.apache.commons</groupId>
