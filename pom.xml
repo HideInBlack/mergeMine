@@ -28,17 +28,6 @@
   <dependencies>
 
     <!--   BM25  -->
-<!--    <dependency>-->
-<!--      <groupId>org.apache.lucene</groupId>-->
-<!--      <artifactId>lucene-core</artifactId>-->
-<!--      <version>9.7.0</version>-->
-<!--    </dependency>-->
-
-<!--    <dependency>-->
-<!--      <groupId>org.apache.lucene</groupId>-->
-<!--      <artifactId>lucene-queryparser</artifactId>-->
-<!--      <version>9.7.0</version>-->
-<!--    </dependency>-->
     <dependency>
       <groupId>org.apache.lucene</groupId>
       <artifactId>lucene-core</artifactId>

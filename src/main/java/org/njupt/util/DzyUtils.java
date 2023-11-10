@@ -81,8 +81,7 @@ public class DzyUtils {
         Directory index = FSDirectory.open(new File("G:\\now\\2024merge\\ChatGPTResearch\\exampleData\\BM25").toPath());
 
         // 创建分析器
-        //Analyzer analyzer = new IKAnalyzer();//中文
-        Analyzer analyzer = new SimpleAnalyzer();
+        Analyzer analyzer = new StandardAnalyzer();
 
         // 创建索引写入器配置
         IndexWriterConfig config = new IndexWriterConfig(analyzer);
@@ -93,10 +92,11 @@ public class DzyUtils {
 
         // 添加示例代码行到索引中
         int count = 0;
-        addCodeLine(writer, "int a = 10;中国人才是牛逼", count++);
-        addCodeLine(writer, "int b = 20;我们大家都是中国人", count++);
-        addCodeLine(writer, "int c = a + b;中华人民共和国", count++);
-        addCodeLine(writer, "System.out.println(c);这里是中国", count++);
+        writer.deleteAll();
+        addCodeLine(writer, "int a = 10;", count++);
+        addCodeLine(writer, "int b = 20;", count++);
+        addCodeLine(writer, "int c = a + b;", count++);
+        addCodeLine(writer, "System.out.println(c);", count++);
 
         // 提交写入器并关闭
         writer.close();
@@ -105,9 +105,13 @@ public class DzyUtils {
         // 创建查询解析器
         IndexReader indexReader = DirectoryReader.open(index);
         IndexSearcher searcher = new IndexSearcher(indexReader);
+        searcher.setSimilarity(new BM25Similarity());
 
         // 创建查询对象
-        Query query = new TermQuery(new Term("code", "b"));
+
+        // 创建查询解析器
+        QueryParser queryParser = new QueryParser("code", new StandardAnalyzer());
+        Query query = queryParser.parse("int c = a");
 
         // 执行查询
         TopDocs topDocs = searcher.search(query, 3);
@@ -134,8 +138,8 @@ public class DzyUtils {
 
     private static void addDocument(IndexWriter indexWriter, String id, String content) throws Exception {
         Document document = new Document();
-        document.add(new StringField("id", id, Field.Store.YES));
-        document.add(new StringField("content", content, Field.Store.YES));
+        document.add(new TextField("id", id, Field.Store.YES));
+        document.add(new TextField("content", content, Field.Store.YES));
         indexWriter.addDocument(document);
     }
     public void getBM25New() throws Exception {
@@ -154,8 +158,9 @@ public class DzyUtils {
         BM25Similarity similarity = new BM25Similarity();
 
         // 创建索引搜索器
-        DirectoryReader directoryReader = DirectoryReader.open(directory);
-        IndexSearcher indexSearcher = new IndexSearcher(directoryReader);
+//        DirectoryReader directoryReader = DirectoryReader.open(directory);
+        IndexReader indexReader = DirectoryReader.open(directory);
+        IndexSearcher indexSearcher = new IndexSearcher(indexReader);
         indexSearcher.setSimilarity(similarity);
 
         // 创建查询解析器
@@ -179,7 +184,7 @@ public class DzyUtils {
         }
 
         // 关闭资源
-        directoryReader.close();
+        indexReader.close();
         directory.close();
     }
 
@@ -217,33 +222,34 @@ public class DzyUtils {
 
     public static void main(String[] args) throws Exception {
         DzyUtils dzyUtils = new DzyUtils();
+        dzyUtils.getBM25();
 //        dzyUtils.getBM25New();
 
 
-        Path path = Paths.get("G:\\now\\2024merge\\ChatGPTResearch\\exampleData\\BM3");
-
-        // create index
-        createIndexAndAddDocuments(path);
-
-        // open index reader and create index searcher
-        IndexReader ir = DirectoryReader.open(FSDirectory.open(path));
-        IndexSearcher is = new IndexSearcher(ir);
-        is.setSimilarity(new BM25Similarity());
-
-        // document which is used to create the query
-//        Document doc = ir.document(1);
-
-        // create query parser
-        QueryParser queryParser = new QueryParser("Abstract", new StandardAnalyzer());
-
-
-        // create query
-        Query query = queryParser.parse("This document also has a completely different abstract which is in no way similar to the abstract of the previous documents.");
-
-        // search
-        for (ScoreDoc result : is.search(query, Integer.MAX_VALUE).scoreDocs) {
-            System.out.println(result.doc + "\t" + result.score);
-        }
+//        Path path = Paths.get("G:\\now\\2024merge\\ChatGPTResearch\\exampleData\\BM3");
+//
+//        // create index
+//        createIndexAndAddDocuments(path);
+//
+//        // open index reader and create index searcher
+//        IndexReader ir = DirectoryReader.open(FSDirectory.open(path));
+//        IndexSearcher is = new IndexSearcher(ir);
+//        is.setSimilarity(new BM25Similarity());
+//
+//        // document which is used to create the query
+////        Document doc = ir.document(1);
+//
+//        // create query parser
+//        QueryParser queryParser = new QueryParser("Abstract", new StandardAnalyzer());
+//
+//
+//        // create query
+//        Query query = queryParser.parse("This document also has a completely different abstract which is in no way similar to the abstract of the previous documents.");
+//
+//        // search
+//        for (ScoreDoc result : is.search(query, Integer.MAX_VALUE).scoreDocs) {
+//            System.out.println(result.doc + "\t" + result.score);
+//        }
 
 
     }
