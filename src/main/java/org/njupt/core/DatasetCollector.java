@@ -2,6 +2,7 @@ package org.njupt.core;
 
 import com.github.javaparser.*;
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.comments.Comment;
 import com.github.javaparser.symbolsolver.JavaSymbolSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
 import org.apache.commons.io.FileUtils;
@@ -21,6 +22,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.DecimalFormat;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class DatasetCollector {
 
@@ -101,8 +103,8 @@ public class DatasetCollector {
     private List<String> tokenize(String codeLine){
 
         List<String> tokenList  = new ArrayList<>();
-        //Firstly, need replace "\n" with "_NewLine_" to rebuild line-level conflict
-        codeLine = codeLine.replace("\n", " _NewLine_ ");
+        //Firstly, need replace "\n" with "NewLineDZY" to rebuild line-level conflict
+        codeLine = codeLine.replace("\n", " NewLineDZY ");
 
         StringProvider provider = new StringProvider(codeLine);
         SimpleCharStream charStream = new SimpleCharStream(provider);
@@ -123,11 +125,11 @@ public class DatasetCollector {
     private List<String> newTokenizer(String code){
 
         List<String> tokenList  = new ArrayList<>();
-        //Firstly, need replace "\n" with "_NewLine_" to rebuild line-level conflict
-        code = code.replace("\n", "\n _NewLine_ ");
+        //Firstly, need replace "\n" with "NewLineDZY" to rebuild line-level conflict
+        String newCode = code.replace("\n", "\n NewLineDZY ");
 
         JavaParser javaParser = new JavaParser(new ParserConfiguration().setSymbolResolver(new JavaSymbolSolver(new ReflectionTypeSolver())));
-        Optional<CompilationUnit> compilationUnit = javaParser.parse(code).getResult();
+        Optional<CompilationUnit> compilationUnit = javaParser.parse(newCode).getResult();
         if (compilationUnit.isPresent()) {
             TokenRange tokenRange = compilationUnit.get().getTokenRange().get();
             tokenRange.forEach(token -> {
@@ -136,7 +138,8 @@ public class DatasetCollector {
                 }
             });
         } else {
-            logger.error("Code not parsed correctly! ******************************************************\n{}", code);
+            logger.error("Code not parsed correctly! ***************************************************Try to use Unicode");
+            return DzyUtils.tokenizeUnicode(code);
         }
         return tokenList;
     }
@@ -169,27 +172,69 @@ public class DatasetCollector {
         List<Map<String, String>> tuples = getTupleFromJson(jsonDirectory, jsonName);
         String preName = jsonName.substring(0, jsonName.length() - 13);
 
-        logger.info("Start use Diff3 merge A O B to generate Token-level conflicts:-------------------------------------------------{}", jsonName);
+        //logger.info("Start use Diff3 merge A O B to generate Token-level conflicts:-------------------------------------------------{}", jsonName);
         for (int i = 0; i < tuples.size(); i++){
+
+            //Store to JSON file
+            logger.info("Start Collect Line-level Conflict(contain token-level) To Generate JSON File From Only One JSON File : {}", jsonName);
+            mapCount.put("line_allCount", mapCount.getOrDefault("line_allCount", 0) + 1);
+
+            JSONObject jsonObject = new JSONObject();
+            jsonObject.put("id", mapCount.get("line_allCount"));
+            jsonObject.put("id_inFile", i + 1);
+            jsonObject.put("file_name", tuples.get(i).get("file_name"));
+            jsonObject.put("json_name", tuples.get(i).get("json_name"));
+            jsonObject.put("repo", tuples.get(i).get("repo"));
+            jsonObject.put("a_contents", tuples.get(i).get("a_contents"));
+            jsonObject.put("o_contents", tuples.get(i).get("o_contents"));
+            jsonObject.put("b_contents", tuples.get(i).get("b_contents"));
+            jsonObject.put("res_region", tuples.get(i).get("res_region"));
+            jsonObject.put("res_label", tuples.get(i).get("res_label"));
+
+            //1.Judge: merge or not ?
+            List<String> listA = newTokenizer(tuples.get(i).get("a_contents"));
+            List<String> listO = newTokenizer(tuples.get(i).get("o_contents"));
+            List<String> listB = newTokenizer(tuples.get(i).get("b_contents"));
+            int lineA = DzyUtils.tokenCountInList("NewLineDZY", listA);
+            int lineO = DzyUtils.tokenCountInList("NewLineDZY", listO);
+            int lineB = DzyUtils.tokenCountInList("NewLineDZY", listB);
+            int maxLine = Math.max(Math.max(lineA, lineO), lineB);
+            int minLine = Math.min(Math.min(lineA, lineO), lineB);
+
+            // (1) no merge
+            System.out.println("maxLine - minLine = " + (maxLine - minLine));
+            if (false){ // merge all
+//            if (maxLine - minLine > 1){
+                mapCount.put("unfit_merge", mapCount.getOrDefault("unfit_merge", 0) + 1);
+                jsonObject.put("can_token_level", false);
+                jsonObject.put("can_merge_succeed", "null");
+                jsonObject.put("match_rate", 0.00);
+                jsonObject.put("token_level_result", "null");
+                jsonObject.put("key_information", "null");//line-level key_information?
+                jsonObject.put("key_context", "null");//line-level key_context?
+                jsonArrayLineLevel.put(jsonObject);
+                continue;
+            }
+
+            // (2) yes merge
+            mapCount.put("fit_merge", mapCount.getOrDefault("fit_merge", 0) + 1);
+
+            //2.Define temp file path and Build new file
             String aPath = jsonDirectory + preName + (i + 1) + "_A.txt";
             String oPath = jsonDirectory + preName + (i + 1) + "_O.txt";
             String bPath = jsonDirectory + preName + (i + 1) + "_B.txt";
             String mergedPath = jsonDirectory + preName + (i + 1) + "_merged.txt";
+            tokenListToNewFile(aPath, listA);//A
+            tokenListToNewFile(oPath, listO);//O
+            tokenListToNewFile(bPath, listB);//B
 
-            //1.tokenize 2.listToFile 3.turn:A.O.B.R
-            tokenListToNewFile(aPath,newTokenizer(tuples.get(i).get("a_contents")));//A
-            tokenListToNewFile(oPath,newTokenizer(tuples.get(i).get("o_contents")));//O
-            tokenListToNewFile(bPath,newTokenizer(tuples.get(i).get("b_contents")));//B
-
-            //Start use Diff3 merge A O B to generate Token-level conflicts
+            //3.Start use Diff3 merge A O B to generate Token-level conflicts
             File a = new File(aPath);
             File o = new File(oPath);
             File b = new File(bPath);
             File merged = new File(mergedPath);
-
             if(merged.exists()) merged.delete();
             Files.copy(a.toPath(), merged.toPath());
-
             logger.info("git merge-file --diff3 {} {} {}", a.getName(), o.getName(), b.getName());
             ProcessBuilder pb = new ProcessBuilder(
                     "git",
@@ -204,10 +249,7 @@ public class DatasetCollector {
                 e.printStackTrace();
             }
 
-            //Restoring conflicting blocks of token-level to row line-level construction
-            String lineMergedPath = jsonDirectory + preName + (i + 1) + "_lineMerged.txt";
-            Path path = Paths.get(lineMergedPath);
-
+            //4.Restoring conflicting blocks of token-level to row line-level construction
             FileReader fileReader = new FileReader(merged);
             BufferedReader bufferedReader = new BufferedReader(fileReader);
             StringBuilder fileContext = new StringBuilder();
@@ -221,48 +263,36 @@ public class DatasetCollector {
                     fileContext.append(line + " ");
                 }
             }
+            String tokenMergeResult = fileContext.toString().replace("NewLineDZY", "\n");
+//            String lineMergedPath = jsonDirectory + preName + (i + 1) + "_lineMerged.txt";
+//            Path path = Paths.get(lineMergedPath);
+//            try (BufferedWriter writer = Files.newBufferedWriter(path, StandardCharsets.UTF_8)) {
+//                //write in Line-Merged file
+//                writer.write(tokenMergeResult);//Restore special token
+//            } catch (IOException e) {
+//                throw new RuntimeException(e);
+//            }
 
-            String tokenMergeResult = fileContext.toString().replace("_NewLine_", "\n");
-            try (BufferedWriter writer = Files.newBufferedWriter(path, StandardCharsets.UTF_8)) {
-                //write in Line-Merged file
-                writer.write(tokenMergeResult);//Restore special token
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-
-            //Delete temp file(A O B)
+            //5.Delete temp file(A O B merged)
             a.delete();
             o.delete();
             b.delete();
+            merged.delete();
 
             //Store to JSON file
-            logger.info("Start Collect Line-level Conflict(contain token-level) To Generate JSON File From Only One JSON File : {}", jsonName);
-            mapCount.put("line_allCount", mapCount.getOrDefault("line_allCount", 0) + 1);
-
-            JSONObject jsonObject = new JSONObject();
-            jsonObject.put("id", mapCount.get("line_allCount"));
-            jsonObject.put("id_inFile", i);
-            jsonObject.put("file_name", tuples.get(i).get("file_name"));
-            jsonObject.put("json_name", tuples.get(i).get("json_name"));
-            jsonObject.put("repo", tuples.get(i).get("repo"));
-            jsonObject.put("a_contents", tuples.get(i).get("a_contents"));
-            jsonObject.put("o_contents", tuples.get(i).get("o_contents"));
-            jsonObject.put("b_contents", tuples.get(i).get("b_contents"));
-            jsonObject.put("res_region", tuples.get(i).get("res_region"));
-            jsonObject.put("res_label", tuples.get(i).get("res_label"));
-
-            jsonObject.put("can_token_level", true);//先默认全部都适合token-level
+            jsonObject.put("can_token_level", true);//yes merge
             if (!tokenMergeResult.contains("<<<<<<<")){
-                mapCount.put("tokenMerge_allCount", mapCount.getOrDefault("tokenMerge_allCount", 0) + 1);
+                mapCount.put("merge_succeed", mapCount.getOrDefault("merge_succeed", 0) + 1);
                 jsonObject.put("can_merge_succeed", true);
             }else {
                 jsonObject.put("can_merge_succeed", false);
             }
             Double matchRate = DzyUtils.perfectMatchRate(tokenMergeResult, tuples.get(i).get("res_region"));
-            if (matchRate == 100) mapCount.put("tokenMerge_correct", mapCount.getOrDefault("tokenMerge_correct", 0) + 1);
+            if (matchRate == 100) mapCount.put("merge_correct", mapCount.getOrDefault("merge_correct", 0) + 1);
             jsonObject.put("match_rate", matchRate);
             jsonObject.put("token_level_result", tokenMergeResult);
-            jsonObject.put("key_information", " ");
+            jsonObject.put("key_information", "null");
+            jsonObject.put("key_context", "null");
             jsonArrayLineLevel.put(jsonObject);
         }
     }
@@ -283,13 +313,17 @@ public class DatasetCollector {
         }
         //Write in file.
         DzyUtils.stringToBuildFile(directory + JSON + jsonName, jsonArray.toString());
-        logger.info("Statistical results of data:\n{}", map);
+        logger.info("Statistical results of {} data:\n{}", jsonName, map);
     }
 
     public static void main(String[] args) throws IOException, JSONException {
         DatasetCollector collector = new DatasetCollector();
         //collector.getConflictFromJson("G:\\now\\2024merge\\ChatGPTResearch\\exampleData\\acceptA\\100004_metadata.json");
         collector.allTuplesToTokenDiff(JavaDirectory, "java.json");
+//        collector.allTuplesToTokenDiff("G:\\now\\2024merge\\ChatGPTResearch\\exampleData\\acceptA\\", "acceptA.json");
+
+
+
 
     }
 
