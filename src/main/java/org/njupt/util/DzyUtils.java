@@ -2,9 +2,6 @@ package org.njupt.util;
 
 import org.apache.commons.text.similarity.JaccardSimilarity;
 import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.analysis.core.KeywordAnalyzer;
-import org.apache.lucene.analysis.core.SimpleAnalyzer;
-import org.apache.lucene.analysis.en.EnglishAnalyzer;
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
@@ -25,7 +22,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.DecimalFormat;
-
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.util.regex.MatchResult;
+import java.util.regex.Pattern;
 
 
 public class DzyUtils {
@@ -35,12 +36,34 @@ public class DzyUtils {
     public static final String BM25INDEX = "G:/now/2024merge/backup/BM25Index";
 
     /**
+     * Unicode tokenize code(with comment)
+     * @param codeComment code with comment(javaParser can't have use)
+     * @return list
+     */
+    public static List<String> tokenizeUnicode(String codeComment){
+        codeComment = codeComment.replace("\n", " NewLineDZY ");
+        String regex = "[\\p{L}\\p{M}\\p{N}]+(?:\\p{Pi}[\\p{L}\\p{M}\\p{N}]+)*|[\\p{P}\\p{S}]";
+        String[] parts = Pattern.compile(regex).matcher(codeComment).results().map(MatchResult::group).toArray(String[]::new);
+        return List.of(parts);
+    }
+
+    /**
      * According to String, write in file
      * @param filePath file's path
      * @param context file's context
      */
     public static void stringToBuildFile(String filePath, String context){
         Path path = Paths.get(filePath);
+
+        // Check if the parent directory exists, if not, create it
+        Path parentDir = path.getParent();
+        if (parentDir != null && !Files.exists(parentDir)) {
+            try {
+                Files.createDirectories(parentDir);
+            } catch (IOException e) {
+                throw new RuntimeException("Failed to create parent directory: " + parentDir, e);
+            }
+        }
         try (BufferedWriter writer = Files.newBufferedWriter(path, StandardCharsets.UTF_8)) {
             writer.write(context);
         } catch (IOException e) {
@@ -55,6 +78,9 @@ public class DzyUtils {
      * @return percent of match rate
      */
     public static Double perfectMatchRate(String ours, String target){
+        ours = ours.replaceAll("\\s*","");
+        target = target.replaceAll("\\s*","");
+
         //Use Apache Commons Text(Jaccard Similarity)
         JaccardSimilarity jaccardSimilarity = new JaccardSimilarity();
         double similarity = jaccardSimilarity.apply(ours, target);
@@ -63,6 +89,21 @@ public class DzyUtils {
         logger.info("Code's similarity is : {}%", decimalFormat.format(similarity * 100));
         return Double.valueOf(decimalFormat.format(similarity * 100));
     }
+
+    /**
+     * Count the number of times a character appears in the list
+     * @param target target token
+     * @param list token list
+     * @return count
+     */
+    public static int tokenCountInList(String target, List<String> list){
+        int count = 0;
+        for (String token : list){
+            if (Objects.equals(target, token)) count++;
+        }
+        return count;
+    }
+
 
     /**
      * Get BM25 score by query KeyCode in merged.java
@@ -126,6 +167,9 @@ public class DzyUtils {
                 "G:\\now\\2024merge\\ChatGPTResearch\\exampleData\\TestBM25\\100004_merged.java",
                 "+eventsRepository . syncTagsFilter historyManagerParams . getFilterModel ",
                 new StandardAnalyzer());
+
+
+
     }
 
 }
