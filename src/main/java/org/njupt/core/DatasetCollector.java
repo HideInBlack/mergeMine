@@ -2,12 +2,9 @@ package org.njupt.core;
 
 import com.github.javaparser.*;
 import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.comments.Comment;
 import com.github.javaparser.symbolsolver.JavaSymbolSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
 import org.apache.commons.io.FileUtils;
-import org.apache.commons.text.similarity.JaccardSimilarity;
-import org.apache.commons.text.similarity.LevenshteinDistance;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -20,9 +17,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.text.DecimalFormat;
 import java.util.*;
-import java.util.stream.Collectors;
+
 
 public class DatasetCollector {
 
@@ -96,72 +92,6 @@ public class DatasetCollector {
     }
 
     /**
-     * Tokenize code line (use javaParser)
-     * @param codeLine code line String
-     * @return tokens list
-     */
-    private List<String> tokenize(String codeLine){
-
-        List<String> tokenList  = new ArrayList<>();
-        //Firstly, need replace "\n" with "NewLineDZY" to rebuild line-level conflict
-        codeLine = codeLine.replace("\n", " NewLineDZY ");
-
-        StringProvider provider = new StringProvider(codeLine);
-        SimpleCharStream charStream = new SimpleCharStream(provider);
-        GeneratedJavaParserTokenManager tokenGenerate = new GeneratedJavaParserTokenManager(charStream);
-        String strToken = tokenGenerate.getNextToken().toString();
-        while (!strToken.equals("")){
-            tokenList.add(strToken);
-            strToken = tokenGenerate.getNextToken().toString();
-        }
-        return tokenList;
-    }
-
-    /**
-     * New Tokenizer (use javaParser) 2023年11月5日19:35:14
-     * @param code code lines
-     * @return tokens list
-     */
-    private List<String> newTokenizer(String code){
-
-        List<String> tokenList  = new ArrayList<>();
-        //Firstly, need replace "\n" with "NewLineDZY" to rebuild line-level conflict
-        String newCode = code.replace("\n", "\n NewLineDZY ");
-
-        JavaParser javaParser = new JavaParser(new ParserConfiguration().setSymbolResolver(new JavaSymbolSolver(new ReflectionTypeSolver())));
-        Optional<CompilationUnit> compilationUnit = javaParser.parse(newCode).getResult();
-        if (compilationUnit.isPresent()) {
-            TokenRange tokenRange = compilationUnit.get().getTokenRange().get();
-            tokenRange.forEach(token -> {
-                if (!Objects.equals(token.getText().replaceAll("\\s*",""), "")){
-                    tokenList.add(token.getText());
-                }
-            });
-        } else {
-            logger.error("Code not parsed correctly! ***************************************************Try to use Unicode");
-            return DzyUtils.tokenizeUnicode(code);
-        }
-        return tokenList;
-    }
-
-    /**
-     * Take token list to new file
-     * @param filePath new file path
-     * @param tokenList token list
-     */
-    private void tokenListToNewFile(String filePath, List<String> tokenList){
-        Path path = Paths.get(filePath);
-        try (BufferedWriter writer = Files.newBufferedWriter(path, StandardCharsets.UTF_8)) {
-            for (int i = 0; i < tokenList.size(); i++){
-                writer.write(tokenList.get(i));
-                if (i != tokenList.size() - 1) writer.newLine();
-            }
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    /**
      * 1.Get tuple from Json(getTupleFromJson); 2.Use newTokenizer to tokens; 3. Use tokenListToNewFile to files; 4. Use Diff3 git merge to merged file.
      * @param jsonDirectory Json file root path
      * @param jsonName Json file name
@@ -192,9 +122,9 @@ public class DatasetCollector {
             jsonObject.put("res_label", tuples.get(i).get("res_label"));
 
             //1.Judge: merge or not ?
-            List<String> listA = newTokenizer(tuples.get(i).get("a_contents"));
-            List<String> listO = newTokenizer(tuples.get(i).get("o_contents"));
-            List<String> listB = newTokenizer(tuples.get(i).get("b_contents"));
+            List<String> listA = DzyUtils.newTokenizer(tuples.get(i).get("a_contents"));
+            List<String> listO = DzyUtils.newTokenizer(tuples.get(i).get("o_contents"));
+            List<String> listB = DzyUtils.newTokenizer(tuples.get(i).get("b_contents"));
             int lineA = DzyUtils.tokenCountInList("NewLineDZY", listA);
             int lineO = DzyUtils.tokenCountInList("NewLineDZY", listO);
             int lineB = DzyUtils.tokenCountInList("NewLineDZY", listB);
@@ -224,9 +154,9 @@ public class DatasetCollector {
             String oPath = jsonDirectory + preName + (i + 1) + "_O.txt";
             String bPath = jsonDirectory + preName + (i + 1) + "_B.txt";
             String mergedPath = jsonDirectory + preName + (i + 1) + "_merged.txt";
-            tokenListToNewFile(aPath, listA);//A
-            tokenListToNewFile(oPath, listO);//O
-            tokenListToNewFile(bPath, listB);//B
+            DzyUtils.tokenListToNewFile(aPath, listA);//A
+            DzyUtils.tokenListToNewFile(oPath, listO);//O
+            DzyUtils.tokenListToNewFile(bPath, listB);//B
 
             //3.Start use Diff3 merge A O B to generate Token-level conflicts
             File a = new File(aPath);
@@ -235,7 +165,7 @@ public class DatasetCollector {
             File merged = new File(mergedPath);
             if(merged.exists()) merged.delete();
             Files.copy(a.toPath(), merged.toPath());
-            logger.info("git merge-file --diff3 {} {} {}", a.getName(), o.getName(), b.getName());
+            logger.info("Id : {}. git merge-file --diff3 {} {} {}", mapCount.get("line_allCount"), a.getName(), o.getName(), b.getName());
             ProcessBuilder pb = new ProcessBuilder(
                     "git",
                     "merge-file",
@@ -277,7 +207,6 @@ public class DatasetCollector {
             a.delete();
             o.delete();
             b.delete();
-            merged.delete();
 
             //Store to JSON file
             jsonObject.put("can_token_level", true);//yes merge
@@ -313,14 +242,21 @@ public class DatasetCollector {
         }
         //Write in file.
         DzyUtils.stringToBuildFile(directory + JSON + jsonName, jsonArray.toString());
-        logger.info("Statistical results of {} data:\n{}", jsonName, map);
+        logger.info("Statistical results of {}:\n{}", jsonName, map);
     }
+
+    public void getKeyContext(String mergedTokenPath, String mergedLinePath){
+
+    }
+
+
+
 
     public static void main(String[] args) throws IOException, JSONException {
         DatasetCollector collector = new DatasetCollector();
         //collector.getConflictFromJson("G:\\now\\2024merge\\ChatGPTResearch\\exampleData\\acceptA\\100004_metadata.json");
-        collector.allTuplesToTokenDiff(JavaDirectory, "java.json");
-//        collector.allTuplesToTokenDiff("G:\\now\\2024merge\\ChatGPTResearch\\exampleData\\acceptA\\", "acceptA.json");
+//        collector.allTuplesToTokenDiff(JavaDirectory, "java.json");
+        collector.allTuplesToTokenDiff("G:\\now\\2024merge\\ChatGPTResearch\\exampleData\\acceptA\\", "acceptA.json");
 
 
 

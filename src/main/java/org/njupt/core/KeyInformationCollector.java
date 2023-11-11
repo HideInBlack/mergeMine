@@ -7,8 +7,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 public class KeyInformationCollector {
 
@@ -98,7 +96,9 @@ public class KeyInformationCollector {
                     continue;
                 }
                 if (key){
-                    content.append(line).append(" ");
+//                    content.append(line).append(" ");
+                    //这一步是为了后续使用BM25方便
+                    content.append("\"").append(line).append("\"").append(" ");
                 }
             }
         }
