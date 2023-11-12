@@ -87,7 +87,7 @@ public class DzyUtils {
                 }
             });
         } else {
-            logger.error("Code not parsed correctly! ***************************************************Try to use Unicode");
+//            logger.error("Code not parsed correctly! ***************************************************Try to use Unicode");
             return DzyUtils.tokenizeUnicodeToString(code);
         }
         return tokenString.toString();

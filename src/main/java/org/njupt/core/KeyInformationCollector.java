@@ -60,14 +60,14 @@ public class KeyInformationCollector {
 
     /**
      * Extract Token-level Tuples (Key Information)
-     * @param filePath merged file path
+     * @param tokenMergedFilePath merged file path
      * @return token-level tuples(Key Information)
      * @throws IOException IO
      */
-    public static List<Map<String, String>> extractTokenTuples(String filePath) throws IOException {
+    public static List<Map<String, String>> extractTokenTuples(String tokenMergedFilePath) throws IOException {
         List<Map<String, String>> tokenTuples = new ArrayList<>();
 
-        try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
+        try (BufferedReader reader = new BufferedReader(new FileReader(tokenMergedFilePath))) {
             Map<String, String> map = new HashMap<>();
             StringBuilder content = new StringBuilder();
 
@@ -96,9 +96,9 @@ public class KeyInformationCollector {
                     continue;
                 }
                 if (key){
-//                    content.append(line).append(" ");
+                    content.append(line).append(" ");
                     //这一步是为了后续使用BM25方便
-                    content.append("\"").append(line).append("\"").append(" ");
+//                    content.append("\"").append(line).append("\"").append(" ");
                 }
             }
         }

@@ -5,6 +5,9 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.symbolsolver.JavaSymbolSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
 import org.apache.commons.io.FileUtils;
+import org.apache.lucene.analysis.Analyzer;
+import org.apache.lucene.analysis.standard.StandardAnalyzer;
+import org.apache.lucene.store.Directory;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -98,9 +101,13 @@ public class DatasetCollector {
      * @throws JSONException JSON
      * @throws IOException IO
      */
-    public void fromTupleToTokenDiff(String jsonDirectory, String jsonName, JSONArray jsonArrayLineLevel, Map<String, Integer> mapCount) throws JSONException, IOException {
+    public void fromTupleToTokenDiff(String jsonDirectory, String jsonName, JSONArray jsonArrayLineLevel, Map<String, Integer> mapCount) throws Exception {
         List<Map<String, String>> tuples = getTupleFromJson(jsonDirectory, jsonName);
         String preName = jsonName.substring(0, jsonName.length() - 13);
+
+        // Create index (BM25) [one json one merged index]
+        Analyzer analyzer = new StandardAnalyzer();// custom Analyzer
+        Directory directory = KeyContextCollector.createBM25(jsonDirectory + preName + "merged.java", analyzer);
 
         //logger.info("Start use Diff3 merge A O B to generate Token-level conflicts:-------------------------------------------------{}", jsonName);
         for (int i = 0; i < tuples.size(); i++){
@@ -133,8 +140,9 @@ public class DatasetCollector {
 
             // (1) no merge
             System.out.println("maxLine - minLine = " + (maxLine - minLine));
-            if (false){ // merge all
-//            if (maxLine - minLine > 1){
+//            if (false){ // merge all
+//            if (maxLine - minLine > 2){ // only merge fit_merge
+            if (maxLine > 7){
                 mapCount.put("unfit_merge", mapCount.getOrDefault("unfit_merge", 0) + 1);
                 jsonObject.put("can_token_level", false);
                 jsonObject.put("can_merge_succeed", "null");
@@ -179,6 +187,34 @@ public class DatasetCollector {
                 e.printStackTrace();
             }
 
+            // Core : Get Key Information
+            List<Map<String, String>> keyInformation = KeyInformationCollector.extractTokenTuples(mergedPath);
+            JSONArray jsonArrayInformation = new JSONArray();
+            int count = 1;
+            for (Map<String, String> map : keyInformation){
+                JSONObject jsonObject1 = new JSONObject();
+                jsonObject1.put("id_tokenLevel", count++);
+                jsonObject1.put("a_keyInfo", map.get("a_tokens"));
+                jsonObject1.put("o_keyInfo", map.get("o_tokens"));
+                jsonObject1.put("b_keyInfo", map.get("b_tokens"));
+                jsonArrayInformation.put(jsonObject1);
+            }
+            jsonObject.put("key_information", jsonArrayInformation);
+
+            // Core : Get Key Context
+            List<Map<String, String>> keyContext = KeyContextCollector.useBM25(directory, keyInformation, 1, analyzer);// Get keyContext with BM25Index
+            JSONArray jsonArrayContext = new JSONArray();
+            count = 1;
+            for (Map<String, String> map : keyContext){
+                JSONObject jsonObject1 = new JSONObject();
+                jsonObject1.put("id_tokenLevel", count++);
+                jsonObject1.put("a_keyContext", map.get("a_keyContext"));
+                jsonObject1.put("o_keyContext", map.get("o_keyContext"));
+                jsonObject1.put("b_keyContext", map.get("b_keyContext"));
+                jsonArrayContext.put(jsonObject1);
+            }
+            jsonObject.put("key_context", jsonArrayContext);
+
             //4.Restoring conflicting blocks of token-level to row line-level construction
             FileReader fileReader = new FileReader(merged);
             BufferedReader bufferedReader = new BufferedReader(fileReader);
@@ -220,17 +256,16 @@ public class DatasetCollector {
             if (matchRate == 100) mapCount.put("merge_correct", mapCount.getOrDefault("merge_correct", 0) + 1);
             jsonObject.put("match_rate", matchRate);
             jsonObject.put("token_level_result", tokenMergeResult);
-            jsonObject.put("key_information", "null");
-            jsonObject.put("key_context", "null");
             jsonArrayLineLevel.put(jsonObject);
         }
+        directory.close();
     }
 
     /**
      * Merge token-level conflicts across the entire directory.
      * @param directory json directory
      */
-    public void allTuplesToTokenDiff(String directory, String jsonName) throws JSONException, IOException {
+    public void allTuplesToTokenDiff(String directory, String jsonName) throws Exception {
         JSONArray jsonArray = new JSONArray();
         Map<String, Integer> map = new HashMap<>();
         File files = new File(directory);
@@ -245,20 +280,11 @@ public class DatasetCollector {
         logger.info("Statistical results of {}:\n{}", jsonName, map);
     }
 
-    public void getKeyContext(String mergedTokenPath, String mergedLinePath){
-
-    }
-
-
-
-
-    public static void main(String[] args) throws IOException, JSONException {
+    public static void main(String[] args) throws Exception {
         DatasetCollector collector = new DatasetCollector();
-        //collector.getConflictFromJson("G:\\now\\2024merge\\ChatGPTResearch\\exampleData\\acceptA\\100004_metadata.json");
-//        collector.allTuplesToTokenDiff(JavaDirectory, "java.json");
+
+//        collector.allTuplesToTokenDiff(JavaDirectory, "javaVersion3.json");
         collector.allTuplesToTokenDiff("G:\\now\\2024merge\\ChatGPTResearch\\exampleData\\acceptA\\", "acceptA.json");
-
-
 
 
     }
