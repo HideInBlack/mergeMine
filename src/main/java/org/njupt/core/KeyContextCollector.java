@@ -94,7 +94,7 @@ public class KeyContextCollector {
         return contextList;
     }
 
-    private static String queryBM25(IndexSearcher indexSearcher, QueryParser queryParser , String queryKeyCode, int queryNumber) throws ParseException, IOException {
+    private static String queryBM25(IndexSearcher indexSearcher, QueryParser queryParser , String queryKeyCode, int queryNumber) throws IOException {
 //        System.out.println("QueryKeyCode: ------------------>\n" + queryKeyCode);
         //如果queryKeyCode为空 直接返回其关键上下文信息也为空！
         if (Objects.equals(queryKeyCode.replaceAll("\\s*",""), "")) return " ";
@@ -106,7 +106,13 @@ public class KeyContextCollector {
             code.append("\"").append(token).append("\"");
         }
 
-        Query query = queryParser.parse(code.toString());
+        Query query = null;
+        try {
+            query = queryParser.parse(code.toString());
+        } catch (Exception e) {
+            System.out.println("Query code is wrong:--------------->\n" + code);
+            return " ";
+        }
         TopDocs topDocs = indexSearcher.search(query, queryNumber);
 
         StringBuilder queryResult = new StringBuilder();

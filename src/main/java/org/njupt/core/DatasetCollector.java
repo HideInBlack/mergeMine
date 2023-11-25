@@ -140,9 +140,9 @@ public class DatasetCollector {
 
             // (1) no merge
             System.out.println("maxLine - minLine = " + (maxLine - minLine));
-//            if (false){ // merge all
+            if (false){ // merge all
 //            if (maxLine - minLine > 2){ // only merge fit_merge
-            if (maxLine > 7){
+//            if (maxLine > 5){
                 mapCount.put("unfit_merge", mapCount.getOrDefault("unfit_merge", 0) + 1);
                 jsonObject.put("can_token_level", false);
                 jsonObject.put("can_merge_succeed", "null");
@@ -280,11 +280,51 @@ public class DatasetCollector {
         logger.info("Statistical results of {}:\n{}", jsonName, map);
     }
 
+    /**
+     * Start Count Numbers Of Resolution Label
+     * @param jsonDirectory json directory
+     * @param jsonName json file name
+     */
+    public Map<String, Integer> countNumFromPrettyJson(String jsonDirectory, String jsonName) throws IOException, JSONException {
+        logger.info("Start Count Numbers Of Resolution Label: {}", jsonName);
+        Map<String, Integer> map = new HashMap<>();
+
+        File file = new File(jsonDirectory + jsonName);
+        String content = FileUtils.readFileToString(file, "UTF-8");
+        JSONArray jsonArray = new JSONArray(content);
+        for (int i = 0; i < jsonArray.length(); i++){
+            map.put(jsonArray.getJSONObject(i).getString("res_label"), map.getOrDefault(jsonArray.getJSONObject(i).getString("res_label"), 0) + 1);
+        }
+        return map;
+    }
+    //Resolution Label In Perfect Match
+    public Map<String, Integer> countPerfectFromJson(String jsonDirectory, String jsonName) throws IOException, JSONException {
+        logger.info("Start Count Numbers Of Resolution Label in Perfect Match: {}", jsonName);
+        Map<String, Integer> map = new HashMap<>();
+
+        File file = new File(jsonDirectory + jsonName);
+        String content = FileUtils.readFileToString(file, "UTF-8");
+        JSONArray jsonArray = new JSONArray(content);
+        for (int i = 0; i < jsonArray.length(); i++){
+            if (jsonArray.getJSONObject(i).getBoolean("can_merge_succeed")){
+                map.put("all_succeeded", map.getOrDefault("all_succeeded", 0) + 1);
+                map.put(jsonArray.getJSONObject(i).getString("res_label"), map.getOrDefault(jsonArray.getJSONObject(i).getString("res_label"), 0) + 1);
+            }
+        }
+        return map;
+    }
+
     public static void main(String[] args) throws Exception {
         DatasetCollector collector = new DatasetCollector();
 
-//        collector.allTuplesToTokenDiff(JavaDirectory, "javaVersion3.json");
-        collector.allTuplesToTokenDiff("G:\\now\\2024merge\\ChatGPTResearch\\exampleData\\acceptA\\", "acceptA.json");
+        //Count Numbers Of Resolution Label
+//        Map<String, Integer> map = collector.countNumFromPrettyJson("G:\\now\\2024merge\\MergeBERT_Data\\fse2022\\automated-analysis-data\\Java\\json\\", "javaContextPrettyVersionAll2.json");
+        Map<String, Integer> map = collector.countPerfectFromJson("G:\\now\\2024merge\\MergeBERT_Data\\fse2022\\automated-analysis-data\\Java\\json\\", "javaContextPrettyVersionAll2.json");
+        System.out.println(map);
+
+        //Generate Json File.
+//        collector.allTuplesToTokenDiff(JavaDirectory, "javaContextVersion2.json");//maxLine <= 5
+//        collector.allTuplesToTokenDiff("G:\\now\\2024merge\\ChatGPTResearch\\exampleData\\acceptA\\", "acceptA.json");
 
 
     }
