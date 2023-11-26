@@ -5,6 +5,7 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.symbolsolver.JavaSymbolSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
 import org.apache.commons.text.similarity.JaccardSimilarity;
+import org.apache.commons.text.similarity.LevenshteinDistance;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -147,10 +148,15 @@ public class DzyUtils {
     public static Double perfectMatchRate(String ours, String target){
         ours = ours.replaceAll("\\s*","");
         target = target.replaceAll("\\s*","");
+        if (ours.length() == 0 && target.length() == 0) return 100.0;
 
-        //Use Apache Commons Text(Jaccard Similarity)
-        JaccardSimilarity jaccardSimilarity = new JaccardSimilarity();
-        double similarity = jaccardSimilarity.apply(ours, target);
+        //1.Use Apache Commons Text(Jaccard Similarity)
+//        JaccardSimilarity jaccardSimilarity = new JaccardSimilarity();
+//        double similarity = jaccardSimilarity.apply(ours, target);
+
+        //2.Use Apache Commons Text(Levenshtein Similarity)
+        int distance = LevenshteinDistance.getDefaultInstance().apply(ours, target);
+        double similarity = 1 - (double) distance / Math.max(ours.length(), target.length());
 
         DecimalFormat decimalFormat = new DecimalFormat("#0.00");
         logger.info("Code's similarity is : {}%", decimalFormat.format(similarity * 100));
@@ -189,10 +195,11 @@ public class DzyUtils {
     }
 
     public static void main(String[] args) throws Exception {
-        System.out.println(DzyUtils.newTokenizerToString("eventsRepository.syncTagsFilter(historyManagerParams.getFilter().getTagsFilter());\n"));
-        System.out.println(DzyUtils.tokenizeUnicodeToString("eventsRepository.syncTagsFilter(historyManagerParams.getFilter().getTagsFilter());\n"));
+        System.out.println(perfectMatchRate("  \n\n\n","      "));
 
 
+//        System.out.println(DzyUtils.newTokenizerToString("eventsRepository.syncTagsFilter(historyManagerParams.getFilter().getTagsFilter());\n"));
+//        System.out.println(DzyUtils.tokenizeUnicodeToString("eventsRepository.syncTagsFilter(historyManagerParams.getFilter().getTagsFilter());\n"));
     }
 
 }
