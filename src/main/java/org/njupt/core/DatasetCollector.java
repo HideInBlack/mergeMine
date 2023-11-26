@@ -314,13 +314,49 @@ public class DatasetCollector {
         return map;
     }
 
+    public Map<String, Integer> countChatGPTMatchRate(String jsonDirectory, String jsonName) throws IOException, JSONException {
+        logger.info("Get Match Rate Of ChatGPT Answer: {}", jsonName);
+        Map<String, Integer> map = new HashMap<>();
+
+        File file = new File(jsonDirectory + jsonName);
+        String content = FileUtils.readFileToString(file, "UTF-8");
+        JSONArray jsonArray = new JSONArray(content);
+        for (int i = 0; i < jsonArray.length(); i++){
+            JSONObject curJson = jsonArray.getJSONObject(i);
+            String resolution = curJson.getString("res_region");
+
+            double line_no_maxMatch = getMaxMatchInJSONArray(curJson.getJSONArray("line_noContext_answer"), resolution);
+            curJson.put("line_no_maxMatch", line_no_maxMatch);
+            double line_with_maxMatch = getMaxMatchInJSONArray(curJson.getJSONArray("line_withContext_answer"), resolution);
+            curJson.put("line_with_maxMatch", line_with_maxMatch);
+            double token_no_maxMatch = getMaxMatchInJSONArray(curJson.getJSONArray("token_noContext_answer"), resolution);
+            curJson.put("token_no_maxMatch", token_no_maxMatch);
+            double token_with_maxMatch = getMaxMatchInJSONArray(curJson.getJSONArray("token_withContext_answer"), resolution);
+            curJson.put("token_with_maxMatch", token_with_maxMatch);
+        }
+        //Rewrite in file.
+        DzyUtils.stringToBuildFile(jsonDirectory + jsonName, jsonArray.toString());
+        return map;
+    }
+    private double getMaxMatchInJSONArray(JSONArray answers, String resolution){// Be Used by last
+        double maxMatchRate = 0.0;
+        for (int k = 0; k < answers.length(); k++) {
+            String currentAnswer = (String) answers.get(k);
+            double currentMatchRate = DzyUtils.perfectMatchRate(currentAnswer, resolution);
+            maxMatchRate = Math.max(maxMatchRate, currentMatchRate);
+        }
+        return maxMatchRate;
+    }
+
     public static void main(String[] args) throws Exception {
         DatasetCollector collector = new DatasetCollector();
 
+        collector.countChatGPTMatchRate("G:/now/2024merge/mergeMinePython/json/","test.json");
+
         //Count Numbers Of Resolution Label
 //        Map<String, Integer> map = collector.countNumFromPrettyJson("G:\\now\\2024merge\\MergeBERT_Data\\fse2022\\automated-analysis-data\\Java\\json\\", "javaContextPrettyVersionAll2.json");
-        Map<String, Integer> map = collector.countPerfectFromJson("G:\\now\\2024merge\\MergeBERT_Data\\fse2022\\automated-analysis-data\\Java\\json\\", "javaContextPrettyVersionAll2.json");
-        System.out.println(map);
+//        Map<String, Integer> map = collector.countPerfectFromJson("G:\\now\\2024merge\\MergeBERT_Data\\fse2022\\automated-analysis-data\\Java\\json\\", "javaContextPrettyVersionAll2.json");
+//        System.out.println(map);
 
         //Generate Json File.
 //        collector.allTuplesToTokenDiff(JavaDirectory, "javaContextVersion2.json");//maxLine <= 5
