@@ -306,17 +306,28 @@ public class DatasetCollector {
         String content = FileUtils.readFileToString(file, "UTF-8");
         JSONArray jsonArray = new JSONArray(content);
         for (int i = 0; i < jsonArray.length(); i++){
-            if (jsonArray.getJSONObject(i).getBoolean("can_merge_succeed")){
-                map.put("all_succeeded", map.getOrDefault("all_succeeded", 0) + 1);
-                map.put(jsonArray.getJSONObject(i).getString("res_label"), map.getOrDefault(jsonArray.getJSONObject(i).getString("res_label"), 0) + 1);
+            if (jsonArray.getJSONObject(i).getBoolean("can_token_level")) {
+                if (jsonArray.getJSONObject(i).getBoolean("can_merge_succeed") && !jsonArray.getJSONObject(i).get("res_label").equals("null")) { // Resolution Label in succeeded
+                    map.put("all_succeeded", map.getOrDefault("all_succeeded", 0) + 1);
+                    if (jsonArray.getJSONObject(i).getDouble("match_rate") == 100) { // Resolution Label in correct
+                        map.put("all_correct", map.getOrDefault("all_correct", 0) + 1);
+                    }
+                    //map.put(jsonArray.getJSONObject(i).getString("res_label"), map.getOrDefault(jsonArray.getJSONObject(i).getString("res_label"), 0) + 1);
+                }
             }
+//            if (jsonArray.getJSONObject(i).getDouble("match_rate") == 100){ // Resolution Label in correct
+//                map.put("all_correct", map.getOrDefault("all_correct", 0) + 1);
+//                map.put(jsonArray.getJSONObject(i).getString("res_label"), map.getOrDefault(jsonArray.getJSONObject(i).getString("res_label"), 0) + 1);
+//            }
         }
+
         return map;
     }
 
     public Map<String, Integer> countChatGPTMatchRate(String jsonDirectory, String jsonName) throws IOException, JSONException {
         logger.info("Get Match Rate Of ChatGPT Answer: {}", jsonName);
-        Map<String, Integer> map = new HashMap<>();
+        LinkedHashMap<String, Integer> map = new LinkedHashMap<>();
+        map.put("line_no",0); map.put("line_with",0); map.put("line_share",0); map.put("token_no",0); map.put("token_with",0); map.put("token_share",0);
 
         File file = new File(jsonDirectory + jsonName);
         String content = FileUtils.readFileToString(file, "UTF-8");
@@ -326,13 +337,24 @@ public class DatasetCollector {
             String resolution = curJson.getString("res_region");
 
             double line_no_maxMatch = getMaxMatchInJSONArray(curJson.getJSONArray("line_noContext_answer"), resolution);
+            if(line_no_maxMatch == 100)  map.put("line_no", map.getOrDefault("line_no", 0) + 1);
             curJson.put("line_no_maxMatch", line_no_maxMatch);
+
             double line_with_maxMatch = getMaxMatchInJSONArray(curJson.getJSONArray("line_withContext_answer"), resolution);
+            if(line_with_maxMatch == 100)  map.put("line_with", map.getOrDefault("line_with", 0) + 1);
             curJson.put("line_with_maxMatch", line_with_maxMatch);
+            //Count line share
+            if (line_no_maxMatch == 100 && line_with_maxMatch == 100) map.put("line_share", map.getOrDefault("line_share", 0) + 1);
+
             double token_no_maxMatch = getMaxMatchInJSONArray(curJson.getJSONArray("token_noContext_answer"), resolution);
+            if(token_no_maxMatch == 100)  map.put("token_no", map.getOrDefault("token_no", 0) + 1);
             curJson.put("token_no_maxMatch", token_no_maxMatch);
+
             double token_with_maxMatch = getMaxMatchInJSONArray(curJson.getJSONArray("token_withContext_answer"), resolution);
+            if(token_with_maxMatch == 100)  map.put("token_with", map.getOrDefault("token_with", 0) + 1);
             curJson.put("token_with_maxMatch", token_with_maxMatch);
+            //Count token share
+            if (token_no_maxMatch == 100 && token_with_maxMatch == 100) map.put("token_share", map.getOrDefault("token_share", 0) + 1);
         }
         //Rewrite in file.
         DzyUtils.stringToBuildFile(jsonDirectory + jsonName, jsonArray.toString());
@@ -348,14 +370,45 @@ public class DatasetCollector {
         return maxMatchRate;
     }
 
+    public Map<String, Integer> rewriteMatchRate(String jsonDirectory, String jsonName) throws IOException, JSONException {
+        logger.info("Get Rewrite Match Rate: {}", jsonName);
+        Map<String, Integer> map = new HashMap<>();
+
+        File file = new File(jsonDirectory + jsonName);
+        String content = FileUtils.readFileToString(file, "UTF-8");
+        JSONArray jsonArray = new JSONArray(content);
+        int perfect = 0;
+        for (int i = 0; i < jsonArray.length(); i++){
+            JSONObject curJson = jsonArray.getJSONObject(i);
+            String resolution = curJson.getString("res_region");
+            String tokenResult = curJson.getString("token_level_result");
+            double currentMatchRate = DzyUtils.perfectMatchRate(tokenResult, resolution);
+            if(currentMatchRate == 100) perfect++;
+            curJson.put("match_rate", currentMatchRate);
+
+        }
+        //Rewrite in file.
+        DzyUtils.stringToBuildFile(jsonDirectory + jsonName, jsonArray.toString());
+        map.put("perfect", perfect);
+        return map;
+    }
+
     public static void main(String[] args) throws Exception {
         DatasetCollector collector = new DatasetCollector();
 
-        collector.countChatGPTMatchRate("G:/now/2024merge/mergeMinePython/json/","test.json");
+
+        //Count ChatGPT Answer Match Rate
+        Map<String, Integer> map = collector.countChatGPTMatchRate("G:/now/2024merge/mergeMinePython/json/","100_filtered.json");
+        System.out.println(map);
+
+//        Map<String, Integer> map = collector.rewriteMatchRate("G:\\now\\2024merge\\MergeBERT_Data\\fse2022\\automated-analysis-data\\Java\\json\\", "javaPrettyVersion3.json");
+//        System.out.println(map);
+//        Map<String, Integer> map = collector.countPerfectFromJson("G:\\now\\2024merge\\MergeBERT_Data\\fse2022\\automated-analysis-data\\Java\\json\\", "javaPrettyVersion3.json");
+//        System.out.println(map);
 
         //Count Numbers Of Resolution Label
-//        Map<String, Integer> map = collector.countNumFromPrettyJson("G:\\now\\2024merge\\MergeBERT_Data\\fse2022\\automated-analysis-data\\Java\\json\\", "javaContextPrettyVersionAll2.json");
-//        Map<String, Integer> map = collector.countPerfectFromJson("G:\\now\\2024merge\\MergeBERT_Data\\fse2022\\automated-analysis-data\\Java\\json\\", "javaContextPrettyVersionAll2.json");
+        //Map<String, Integer> map = collector.countNumFromPrettyJson("G:\\now\\2024merge\\MergeBERT_Data\\fse2022\\automated-analysis-data\\Java\\json\\", "javaContextPrettyVersionAll2.json");
+//        Map<String, Integer> map = collector.countPerfectFromJson("G:/now/2024merge/mergeMinePython/json/", "javaContextPrettyVersionAll2.json");
 //        System.out.println(map);
 
         //Generate Json File.
