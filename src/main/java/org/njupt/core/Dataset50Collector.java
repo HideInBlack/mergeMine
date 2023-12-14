@@ -266,6 +266,20 @@ public class Dataset50Collector {
         return map;
     }
 
+    public TreeMap<Integer, Integer> countTokenInLine(String jsonDirectory, String jsonName) throws IOException, JSONException {
+        logger.info("Start Count Numbers Of TokenLevel In Line: {}", jsonName);
+        TreeMap<Integer, Integer> map = new TreeMap<>();
+
+        File file = new File(jsonDirectory + jsonName);
+        String content = FileUtils.readFileToString(file, "UTF-8");
+        JSONArray jsonArray = new JSONArray(content);
+        for (int i = 0; i < jsonArray.length(); i++){
+            int length = jsonArray.getJSONObject(i).getJSONArray("key_information").length();
+            map.put(length, map.getOrDefault(length, 0) + 1);
+        }
+        return map;
+    }
+
     /**
      *  --------------------------------------------------------------------main--------------------------------------------------------------------
      */
@@ -274,11 +288,28 @@ public class Dataset50Collector {
         //        dataset50Collector.allTuplesToTokenDiff("G:\\now\\2024merge\\Merge50Repo_Data\\index_conflict_files\\", "50RepoV1.json");
 
         //System.out.println(dataset50Collector.getTupleFromJson("G:\\now\\2024merge\\Merge50Repo_Data\\testBig\\test1\\", "0_metadata.json"));
-        LinkedHashMap<String, Integer> inRepo = dataset50Collector.countPerfectInEveryRepo("G:\\now\\2024merge\\Merge50Repo_Data\\jsonAll\\", "50RepoV1Pretty.json");
-        System.out.println(inRepo);
+//        LinkedHashMap<String, Integer> inRepo = dataset50Collector.countPerfectInEveryRepo("G:\\now\\2024merge\\Merge50Repo_Data\\jsonAll\\", "50RepoV1Pretty.json");
+//        System.out.println(inRepo);
+//        System.out.println(dataset50Collector.countTokenInLine("G:\\now\\2024merge\\mergeMinePython\\json\\mergeBert\\", "javaContextPrettyVersionAll2.json"));//G:\now\2024merge\mergeMinePython\json\mergeBert\javaContextPrettyVersionAll2.json
 
 
         DatasetCollector datasetCollector = new DatasetCollector();
+//        Map<String, Integer> map = datasetCollector.countChoiceMatchRate("G:/now/2024merge/mergeMinePython/output/type_Output/","50RepoClassifierNoLine.json");
+//        System.out.println(map);
+
+//        Map<String, Integer> map = datasetCollector.countChoiceMatchRate("G:/now/2024merge/mergeMinePython/output/type_Output/","50_100v1_classifier.json");
+//        Map<String, Integer> map1 = datasetCollector.countChoiceMatchRate("G:/now/2024merge/mergeMinePython/output/type_Output/","100_v1_classifier.json");
+//        Map<String, Integer> map2 = datasetCollector.countChoiceMatchRate("G:/now/2024merge/mergeMinePython/output/type_Output/","100_v2_classifier.json");
+//        Map<String, Integer> map3 = datasetCollector.countChoiceMatchRate("G:/now/2024merge/mergeMinePython/output/type_Output/","100_v3_classifier.json");
+//        System.out.println("50repo:" + map);
+//        System.out.println("MergeBERT1:" + map1);
+//        System.out.println("MergeBERT2:" + map2);
+//        System.out.println("MergeBERT3:" + map3);
+
+//        Map<String, Double> map = datasetCollector.countChatGPTMatchRate("G:/now/2024merge/mergeMinePython/output/50Repo_Output/","50_100v1_COT_presuf.json");
+//        System.out.println(map);
+        Map<String, Double> map = datasetCollector.countChatGPTMatchRatePreSuf("G:/now/2024merge/mergeMinePython/output/50Repo_Output/","50_100v2_COT_presuf.json");
+        System.out.println(map);
 
 //        Map<String, Integer> labels = datasetCollector.countNumFromPrettyJson("G:\\now\\2024merge\\Merge50Repo_Data\\jsonAll\\", "50RepoV1Pretty.json");
 //        System.out.println(labels);
