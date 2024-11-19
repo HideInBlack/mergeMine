@@ -1,53 +1,69 @@
 package org.njupt.core;
 
-import com.github.javaparser.*;
-import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.symbolsolver.JavaSymbolSolver;
-import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
 import org.apache.commons.io.FileUtils;
+import org.apache.lucene.analysis.Analyzer;
+import org.apache.lucene.analysis.standard.StandardAnalyzer;
+import org.apache.lucene.store.Directory;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.njupt.util.DzyUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
+import java.util.*;
 
+/**
+ * MergeBERT Dataset Collector
+ */
 public class DatasetCollector {
 
     public static final Logger logger = LoggerFactory.getLogger(DatasetCollector.class);
 
+    public static final String JavaDirectory = "G:/now/2024merge/MergeBERT_Data/fse2022/automated-analysis-data/Java/";
+
+    public static final String CSharpDirectory = "G:/now/2024merge/MergeBERT_Data/fse2022/automated-analysis-data/CSharp/";
+
+    public static final String JavaScriptDirectory = "G:/now/2024merge/MergeBERT_Data/fse2022/automated-analysis-data/JavaScript/";
+
+    public static final String TypeScriptDirectory = "G:/now/2024merge/MergeBERT_Data/fse2022/automated-analysis-data/TypeScript/";
+
+    public static final String JSON = "/json/";
+
     /**
      * Extract conflict tuples from every x_metadata.json file (according to MergeBERT)
-     * @param jsonPath one x_metadata.json file path
+     * @param jsonDirectory one x_metadata.json directory path
      * @return tuples are this file's (A、O、B、R)s
      * @throws IOException IO
      * @throws JSONException JSON
      */
-    public List<List<String>> getTupleFromJson(String jsonPath) throws IOException, JSONException {
-        logger.info("Start Collect Tuples(A O B R) From Only One JSON File : {}", jsonPath);
+    public List<Map<String, String>> getTupleFromJson(String jsonDirectory, String jsonName) throws IOException, JSONException {
+        logger.info("Start Collect Tuples(A O B R) From Only One JSON File : {}", jsonName);
+        List<Map<String, String>> tuples = new ArrayList<>();
 
-        List<List<String>> tuples = new ArrayList<>();
-
-        File file = new File(jsonPath);
+        File file = new File(jsonDirectory + jsonName);
         String content = FileUtils.readFileToString(file, "UTF-8");
         JSONObject jsonObject = new JSONObject(content);
         JSONArray jsonArray = jsonObject.getJSONArray("conflicting_chunks");
-        logger.info("Merged file name is : {}, and it has {} conflicts", jsonObject.get("fname"), jsonArray.length());
+        logger.info("Merged file name is : {}, and it has {} conflicts", jsonName, jsonArray.length());
         for (int i = 0; i < jsonArray.length(); i++){
-            List<String> tuple = new ArrayList<>();
-            tuple.add(jsonArray.getJSONObject(i).get("a_contents").toString());
-            tuple.add(jsonArray.getJSONObject(i).get("base_contents").toString());
-            tuple.add(jsonArray.getJSONObject(i).get("b_contents").toString());
-            tuple.add(jsonArray.getJSONObject(i).get("res_region").toString());
+
+            Map<String, String> tuple = new HashMap<>();
+            tuple.put("a_contents", jsonArray.getJSONObject(i).get("a_contents").toString());
+            tuple.put("o_contents", jsonArray.getJSONObject(i).get("base_contents").toString());
+            tuple.put("b_contents", jsonArray.getJSONObject(i).get("b_contents").toString());
+            tuple.put("res_region", jsonArray.getJSONObject(i).get("res_region").toString());
+            try{
+                tuple.put("res_label", jsonArray.getJSONObject(i).get("label").toString());//may be wrong.
+            }catch (JSONException e){
+                tuple.put("res_label", "null");
+            }
+            tuple.put("file_name", jsonObject.getString("fname"));
+            tuple.put("json_name", jsonName);
+            tuple.put("repo", jsonObject.getString("repo"));
+
             tuples.add(tuple);
         }
         return tuples;
@@ -74,104 +90,85 @@ public class DatasetCollector {
     }
 
     /**
-     * Tokenize code line (use javaParser)
-     * @param codeLine code line String
-     * @return tokens list
-     */
-    private List<String> tokenize(String codeLine){
-
-        List<String> tokenList  = new ArrayList<>();
-        //Firstly, need replace "\n" with "_NewLine_" to rebuild line-level conflict
-        codeLine = codeLine.replace("\n", " _NewLine_ ");
-
-        StringProvider provider = new StringProvider(codeLine);
-        SimpleCharStream charStream = new SimpleCharStream(provider);
-        GeneratedJavaParserTokenManager tokenGenerate = new GeneratedJavaParserTokenManager(charStream);
-        String strToken = tokenGenerate.getNextToken().toString();
-        while (!strToken.equals("")){
-            tokenList.add(strToken);
-            strToken = tokenGenerate.getNextToken().toString();
-        }
-        return tokenList;
-    }
-
-    /**
-     * New Tokenizer (use javaParser) 2023年11月5日19:35:14
-     * @param code code lines
-     * @return tokens list
-     */
-    private List<String> newTokenizer(String code){
-
-        List<String> tokenList  = new ArrayList<>();
-        //Firstly, need replace "\n" with "_NewLine_" to rebuild line-level conflict
-        code = code.replace("\n", "\n _NewLine_ ");
-
-        JavaParser javaParser = new JavaParser(new ParserConfiguration().setSymbolResolver(new JavaSymbolSolver(new ReflectionTypeSolver())));
-        Optional<CompilationUnit> compilationUnit = javaParser.parse(code).getResult();
-        if (compilationUnit.isPresent()) {
-            TokenRange tokenRange = compilationUnit.get().getTokenRange().get();
-            tokenRange.forEach(token -> {
-                if (!Objects.equals(token.getText().replaceAll("\\s*",""), "")){
-                    tokenList.add(token.getText());
-                }
-            });
-        } else {
-            logger.error("Code not parsed correctly!\n{}", code);
-        }
-        return tokenList;
-    }
-
-    /**
-     * Take token list to new file
-     * @param filePath new file path
-     * @param tokenList token list
-     */
-    private void tokenListToNewFile(String filePath, List<String> tokenList){
-        Path path = Paths.get(filePath);
-        try (BufferedWriter writer = Files.newBufferedWriter(path, StandardCharsets.UTF_8)) {
-            for (int i = 0; i < tokenList.size(); i++){
-                writer.write(tokenList.get(i));
-                if (i != tokenList.size() - 1) writer.newLine();
-            }
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    /**
      * 1.Get tuple from Json(getTupleFromJson); 2.Use newTokenizer to tokens; 3. Use tokenListToNewFile to files; 4. Use Diff3 git merge to merged file.
-     * @param jsonPath Json file root path
+     * @param jsonDirectory Json file root path
      * @param jsonName Json file name
      * @throws JSONException JSON
      * @throws IOException IO
      */
-    public void fromTupleToTokenDiff(String jsonPath, String jsonName) throws JSONException, IOException {
-
-        List<List<String>> tuples = getTupleFromJson(jsonPath + jsonName);
+    public void fromTupleToTokenDiff(String jsonDirectory, String jsonName, JSONArray jsonArrayLineLevel, Map<String, Integer> mapCount) throws Exception {
+        List<Map<String, String>> tuples = getTupleFromJson(jsonDirectory, jsonName);
         String preName = jsonName.substring(0, jsonName.length() - 13);
 
-        logger.info("Start use Diff3 merge A O B to generate Token-level conflicts:-------------------------------------------------");
+        // Create index (BM25) [one json one merged index]
+        Analyzer analyzer = new StandardAnalyzer();// custom Analyzer
+        Directory directory = KeyContextCollector.createBM25(jsonDirectory + preName + "merged.java", analyzer);
+
+        //logger.info("Start use Diff3 merge A O B to generate Token-level conflicts:-------------------------------------------------{}", jsonName);
         for (int i = 0; i < tuples.size(); i++){
-            String aPath = jsonPath + preName + (i + 1) + "_A.txt";
-            String oPath = jsonPath + preName + (i + 1) + "_O.txt";
-            String bPath = jsonPath + preName + (i + 1) + "_B.txt";
-            String mergedPath = jsonPath + preName + (i + 1) + "_merged.txt";
 
-            //1.tokenize 2.listToFile 3.turn:A.O.B.R
-            tokenListToNewFile(aPath,newTokenizer(tuples.get(i).get(0)));//A
-            tokenListToNewFile(oPath,newTokenizer(tuples.get(i).get(1)));//O
-            tokenListToNewFile(bPath,newTokenizer(tuples.get(i).get(2)));//B
+            //Store to JSON file
+            logger.info("Start Collect Line-level Conflict(contain token-level) To Generate JSON File From Only One JSON File : {}", jsonName);
+            mapCount.put("line_allCount", mapCount.getOrDefault("line_allCount", 0) + 1);
 
-            //Start use Diff3 merge A O B to generate Token-level conflicts
+            JSONObject jsonObject = new JSONObject();
+            jsonObject.put("id", mapCount.get("line_allCount"));
+            jsonObject.put("id_inFile", i + 1);
+            jsonObject.put("file_name", tuples.get(i).get("file_name"));
+            jsonObject.put("json_name", tuples.get(i).get("json_name"));
+            jsonObject.put("repo", tuples.get(i).get("repo"));
+            jsonObject.put("a_contents", tuples.get(i).get("a_contents"));
+            jsonObject.put("o_contents", tuples.get(i).get("o_contents"));
+            jsonObject.put("b_contents", tuples.get(i).get("b_contents"));
+            jsonObject.put("res_region", tuples.get(i).get("res_region"));
+            jsonObject.put("res_label", tuples.get(i).get("res_label"));
+
+            //1.Judge: merge or not ?
+            List<String> listA = DzyUtils.newTokenizer(tuples.get(i).get("a_contents"));
+            List<String> listO = DzyUtils.newTokenizer(tuples.get(i).get("o_contents"));
+            List<String> listB = DzyUtils.newTokenizer(tuples.get(i).get("b_contents"));
+            int lineA = DzyUtils.tokenCountInList("NewLineDZY", listA);
+            int lineO = DzyUtils.tokenCountInList("NewLineDZY", listO);
+            int lineB = DzyUtils.tokenCountInList("NewLineDZY", listB);
+            int maxLine = Math.max(Math.max(lineA, lineO), lineB);
+            int minLine = Math.min(Math.min(lineA, lineO), lineB);
+
+            // (1) no merge
+            System.out.println("maxLine - minLine = " + (maxLine - minLine));
+            if (false){ // merge all
+//            if (maxLine - minLine > 2){ // only merge fit_merge
+//            if (maxLine > 5){
+                mapCount.put("unfit_merge", mapCount.getOrDefault("unfit_merge", 0) + 1);
+                jsonObject.put("can_token_level", false);
+                jsonObject.put("can_merge_succeed", "null");
+                jsonObject.put("match_rate", 0.00);
+                jsonObject.put("token_level_result", "null");
+                jsonObject.put("key_information", "null");//line-level key_information?
+                jsonObject.put("key_context", "null");//line-level key_context?
+                jsonArrayLineLevel.put(jsonObject);
+                continue;
+            }
+
+            // (2) yes merge
+            mapCount.put("fit_merge", mapCount.getOrDefault("fit_merge", 0) + 1);
+
+            //2.Define temp file path and Build new file
+            String aPath = jsonDirectory + preName + (i + 1) + "_A.txt";
+            String oPath = jsonDirectory + preName + (i + 1) + "_O.txt";
+            String bPath = jsonDirectory + preName + (i + 1) + "_B.txt";
+            String mergedPath = jsonDirectory + preName + (i + 1) + "_merged.txt";
+            DzyUtils.tokenListToNewFile(aPath, listA);//A
+            DzyUtils.tokenListToNewFile(oPath, listO);//O
+            DzyUtils.tokenListToNewFile(bPath, listB);//B
+
+            //3.Start use Diff3 merge A O B to generate Token-level conflicts
             File a = new File(aPath);
             File o = new File(oPath);
             File b = new File(bPath);
             File merged = new File(mergedPath);
-
             if(merged.exists()) merged.delete();
             Files.copy(a.toPath(), merged.toPath());
-
-            logger.info("git merge-file --diff3 {} {} {}", a.getName(), o.getName(), b.getName());
+            logger.info("Id : {}. git merge-file --diff3 {} {} {}", mapCount.get("line_allCount"), a.getName(), o.getName(), b.getName());
             ProcessBuilder pb = new ProcessBuilder(
                     "git",
                     "merge-file",
@@ -185,10 +182,35 @@ public class DatasetCollector {
                 e.printStackTrace();
             }
 
-            //Restoring conflicting blocks of token-level to row line-level construction
-            String lineMergedPath = jsonPath + preName + (i + 1) + "_lineMerged.txt";
-            Path path = Paths.get(lineMergedPath);
+            // Core : Get Key Information
+            List<Map<String, String>> keyInformation = KeyInformationCollector.extractTokenTuples(mergedPath);
+            JSONArray jsonArrayInformation = new JSONArray();
+            int count = 1;
+            for (Map<String, String> map : keyInformation){
+                JSONObject jsonObject1 = new JSONObject();
+                jsonObject1.put("id_tokenLevel", count++);
+                jsonObject1.put("a_keyInfo", map.get("a_tokens"));
+                jsonObject1.put("o_keyInfo", map.get("o_tokens"));
+                jsonObject1.put("b_keyInfo", map.get("b_tokens"));
+                jsonArrayInformation.put(jsonObject1);
+            }
+            jsonObject.put("key_information", jsonArrayInformation);
 
+            // Core : Get Key Context
+            List<Map<String, String>> keyContext = KeyContextCollector.useBM25(directory, keyInformation, 1, analyzer);// Get keyContext with BM25Index
+            JSONArray jsonArrayContext = new JSONArray();
+            count = 1;
+            for (Map<String, String> map : keyContext){
+                JSONObject jsonObject1 = new JSONObject();
+                jsonObject1.put("id_tokenLevel", count++);
+                jsonObject1.put("a_keyContext", map.get("a_keyContext"));
+                jsonObject1.put("o_keyContext", map.get("o_keyContext"));
+                jsonObject1.put("b_keyContext", map.get("b_keyContext"));
+                jsonArrayContext.put(jsonObject1);
+            }
+            jsonObject.put("key_context", jsonArrayContext);
+
+            //4.Restoring conflicting blocks of token-level to row line-level construction
             FileReader fileReader = new FileReader(merged);
             BufferedReader bufferedReader = new BufferedReader(fileReader);
             StringBuilder fileContext = new StringBuilder();
@@ -202,66 +224,513 @@ public class DatasetCollector {
                     fileContext.append(line + " ");
                 }
             }
+            String tokenMergeResult = fileContext.toString().replace("NewLineDZY", "\n");
+//            String lineMergedPath = jsonDirectory + preName + (i + 1) + "_lineMerged.txt";
+//            Path path = Paths.get(lineMergedPath);
+//            try (BufferedWriter writer = Files.newBufferedWriter(path, StandardCharsets.UTF_8)) {
+//                //write in Line-Merged file
+//                writer.write(tokenMergeResult);//Restore special token
+//            } catch (IOException e) {
+//                throw new RuntimeException(e);
+//            }
 
-            try (BufferedWriter writer = Files.newBufferedWriter(path, StandardCharsets.UTF_8)) {
-                //write in Line-Merged file
-                writer.write(fileContext.toString().replace("_NewLine_", "\n"));//Restore special token
-            } catch (IOException e) {
-                throw new RuntimeException(e);
+            //5.Delete temp file(A O B merged)
+            a.delete();
+            o.delete();
+            b.delete();
+
+            //Store to JSON file
+            jsonObject.put("can_token_level", true);//yes merge
+            if (!tokenMergeResult.contains("<<<<<<<")){
+                mapCount.put("merge_succeed", mapCount.getOrDefault("merge_succeed", 0) + 1);
+                jsonObject.put("can_merge_succeed", true);
+            }else {
+                jsonObject.put("can_merge_succeed", false);
             }
-
-            //Delete temp file(A O B)
-//            a.delete();
-//            o.delete();
-//            b.delete();
+            Double matchRate = DzyUtils.perfectMatchRate(tokenMergeResult, tuples.get(i).get("res_region"));
+            if (matchRate == 100) mapCount.put("merge_correct", mapCount.getOrDefault("merge_correct", 0) + 1);
+            jsonObject.put("match_rate", matchRate);
+            jsonObject.put("token_level_result", tokenMergeResult);
+            jsonArrayLineLevel.put(jsonObject);
         }
+        directory.close();
+    }
+
+    /**
+     * Merge token-level conflicts across the entire directory.
+     * @param directory json directory
+     */
+    public void allTuplesToTokenDiff(String directory, String jsonName) throws Exception {
+        JSONArray jsonArray = new JSONArray();
+        Map<String, Integer> map = new HashMap<>();
+        File files = new File(directory);
+        String[] list = files.list();
+        for (String fileName : list){
+            if (fileName.endsWith(".json")){
+                fromTupleToTokenDiff(directory, fileName, jsonArray, map);
+            }
+        }
+        //Write in file.
+        DzyUtils.stringToBuildFile(directory + JSON + jsonName, jsonArray.toString());
+        logger.info("Statistical results of {}:\n{}", jsonName, map);
+    }
+
+    /**
+     * Start Count Numbers Of Resolution Label
+     * @param jsonDirectory json directory
+     * @param jsonName json file name
+     */
+    public Map<String, Integer> countNumFromPrettyJson(String jsonDirectory, String jsonName) throws IOException, JSONException {
+        logger.info("Start Count Numbers Of Resolution Label: {}", jsonName);
+        Map<String, Integer> map = new HashMap<>();
+
+        File file = new File(jsonDirectory + jsonName);
+        String content = FileUtils.readFileToString(file, "UTF-8");
+        JSONArray jsonArray = new JSONArray(content);
+        for (int i = 0; i < jsonArray.length(); i++){
+            map.put(jsonArray.getJSONObject(i).getString("res_label"), map.getOrDefault(jsonArray.getJSONObject(i).getString("res_label"), 0) + 1);
+        }
+        return map;
+    }
+    //Resolution Label In Perfect Match
+    public Map<String, Integer> countPerfectFromJson(String jsonDirectory, String jsonName) throws IOException, JSONException {
+        logger.info("Start Count Numbers Of Resolution Label in Perfect Match: {}", jsonName);
+        Map<String, Integer> map = new HashMap<>();
+
+        File file = new File(jsonDirectory + jsonName);
+        String content = FileUtils.readFileToString(file, "UTF-8");
+        JSONArray jsonArray = new JSONArray(content);
+        for (int i = 0; i < jsonArray.length(); i++){
+            if (jsonArray.getJSONObject(i).getBoolean("can_token_level")) {
+                if (jsonArray.getJSONObject(i).getBoolean("can_merge_succeed") && !jsonArray.getJSONObject(i).get("res_label").equals("null")) { // Resolution Label in succeeded
+                    map.put("all_succeeded", map.getOrDefault("all_succeeded", 0) + 1);
+                    if (jsonArray.getJSONObject(i).getDouble("match_rate") == 100) { // Resolution Label in correct
+                        map.put("all_correct", map.getOrDefault("all_correct", 0) + 1);
+                    }
+                    //map.put(jsonArray.getJSONObject(i).getString("res_label"), map.getOrDefault(jsonArray.getJSONObject(i).getString("res_label"), 0) + 1);
+                }
+            }
+//            if (jsonArray.getJSONObject(i).getDouble("match_rate") == 100){ // Resolution Label in correct
+//                map.put("all_correct", map.getOrDefault("all_correct", 0) + 1);
+//                map.put(jsonArray.getJSONObject(i).getString("res_label"), map.getOrDefault(jsonArray.getJSONObject(i).getString("res_label"), 0) + 1);
+//            }
+        }
+
+        return map;
+    }
+    public Map<String, Integer> rewriteMatchRate(String jsonDirectory, String jsonName) throws IOException, JSONException {
+        logger.info("Get Rewrite Match Rate: {}", jsonName);
+        Map<String, Integer> map = new HashMap<>();
+
+        File file = new File(jsonDirectory + jsonName);
+        String content = FileUtils.readFileToString(file, "UTF-8");
+        JSONArray jsonArray = new JSONArray(content);
+        int perfect = 0;
+        for (int i = 0; i < jsonArray.length(); i++){
+            JSONObject curJson = jsonArray.getJSONObject(i);
+            String resolution = curJson.getString("res_region");
+            String tokenResult = curJson.getString("token_level_result");
+            double currentMatchRate = DzyUtils.perfectMatchRate(tokenResult, resolution);
+            if(currentMatchRate == 100) perfect++;
+            curJson.put("match_rate", currentMatchRate);
+
+        }
+        //Rewrite in file.
+        DzyUtils.stringToBuildFile(jsonDirectory + jsonName, jsonArray.toString());
+        map.put("perfect", perfect);
+        return map;
+    }
+
+    private double getMaxMatchInJSONArray(JSONArray answers, String resolution){// Be Used by last
+        double maxMatchRate = 0.0;
+//        for (int k = 0; k < answers.length(); k++) { // 遍历所有答案的效果
+        for (int k = 0; k < 3; k++) { // 只遍历前3个答案的效果
+            String currentAnswer = (String) answers.get(k);
+            double currentMatchRate = DzyUtils.perfectMatchRate(currentAnswer, resolution);
+            maxMatchRate = Math.max(maxMatchRate, currentMatchRate);
+        }
+        return maxMatchRate;
+    }
+
+    private double getAllBleuInJSONArray(JSONArray answers, String resolution){// Be Used by last
+        double sumBleu = 0.0;
+//        for (int k = 0; k < answers.length(); k++) { // 遍历所有答案的效果
+        for (int k = 0; k < 3; k++) { // 只遍历前3个答案的效果
+            String currentAnswer = DzyUtils.newTokenizerToString((String) answers.get(k));
+
+            List<String> referenceResolution = new ArrayList<>(List.of(DzyUtils.newTokenizerToString(resolution)));
+            double bleuScore = DzyUtils.computeBLEU(currentAnswer, referenceResolution);
+            if (Double.isNaN(bleuScore)){
+                bleuScore = 0.0;
+            }
+            int temp = k + 1;
+            System.out.println("BLEU-4 Score " + temp + ": " + bleuScore);
+
+            sumBleu += bleuScore;
+        }
+        System.out.println("------------Sum of BLEU-4 Score: " + sumBleu);
+//        return sumBleu / answers.length();
+        return sumBleu / 3;
+    }
+
+    public Map<String, Double> countChatGPTMatchRate(String jsonDirectory, String jsonName) throws IOException, JSONException {
+        logger.info("Get Match Rate Of ChatGPT Answer: {}", jsonName);
+        LinkedHashMap<String, Double> map = new LinkedHashMap<>();
+        map.put("line_no",0.0); map.put("line_withSlicing", 0.0); map.put("line_share", 0.0); map.put("token_no", 0.0); map.put("token_withSlicing", 0.0); map.put("token_share", 0.0); map.put("all_share", 0.0);
+
+        File file = new File(jsonDirectory + jsonName);
+        String content = FileUtils.readFileToString(file, "UTF-8");
+        JSONArray jsonArray = new JSONArray(content);
+        double count1 = 0; double count2 = 0; double count3 = 0; double count4 = 0;
+        for (int i = 0; i < jsonArray.length(); i++){
+            JSONObject curJson = jsonArray.getJSONObject(i);
+            String resolution = curJson.getString("res_region");
+
+            double line_no_maxMatch = getMaxMatchInJSONArray(curJson.getJSONArray("line_noContext_answer"), resolution);
+            if(line_no_maxMatch == 100)  {
+                map.put("line_no", map.getOrDefault("line_no", 0.0) + 1);
+            }
+            curJson.put("line_no_maxMatch", line_no_maxMatch);
+
+            double line_with_maxMatch = getMaxMatchInJSONArray(curJson.getJSONArray("line_with_BM25Context_answer"), resolution); // line_with_SlicingContext_answer  line_withContext_answer  line_with_BM25Context_answer
+            if(line_with_maxMatch == 100)  {
+                map.put("line_withSlicing", map.getOrDefault("line_withSlicing", 0.0) + 1);
+            }
+            curJson.put("line_with_maxMatch", line_with_maxMatch);
+            //Count line share
+            if (line_no_maxMatch == 100 && line_with_maxMatch == 100) map.put("line_share", map.getOrDefault("line_share", 0.0) + 1);
+
+            double token_no_maxMatch = getMaxMatchInJSONArray(curJson.getJSONArray("token_noContext_answer"), resolution);
+            if(token_no_maxMatch == 100) {
+                map.put("token_no", map.getOrDefault("token_no", 0.0) + 1);
+            }
+            curJson.put("token_no_maxMatch", token_no_maxMatch);
+
+            double token_with_maxMatch = getMaxMatchInJSONArray(curJson.getJSONArray("token_with_BM25Context_answer"), resolution); // token_with_SlicingContext_answer token_withContext_answer  token_with_BM25Context_answer
+            if(token_with_maxMatch == 100) {
+                map.put("token_withSlicing", map.getOrDefault("token_withSlicing", 0.0) + 1);
+            }
+            curJson.put("token_with_maxMatch", token_with_maxMatch);
+            //Count token share
+            if (token_no_maxMatch == 100 && token_with_maxMatch == 100) map.put("token_share", map.getOrDefault("token_share", 0.0) + 1);
+
+            if (token_no_maxMatch == 100 && token_with_maxMatch == 100 && line_no_maxMatch == 100 && line_with_maxMatch == 100) map.put("all_share", map.getOrDefault("all_share", 0.0) + 1);
+            if (token_no_maxMatch == 100 || token_with_maxMatch == 100 || line_no_maxMatch == 100 || line_with_maxMatch == 100) map.put("all", map.getOrDefault("all", 0.0) + 1);
+            if ((token_no_maxMatch == 100 || token_with_maxMatch == 100) && (line_no_maxMatch == 100 || line_with_maxMatch == 100)) map.put("left_right", map.getOrDefault("left_right", 0.0) + 1);
+            count1 += line_no_maxMatch; count2 += line_with_maxMatch; count3 += token_no_maxMatch; count4 += token_with_maxMatch;
+        }
+//        DecimalFormat decimalFormat = new DecimalFormat("#0.0000");
+//        map.put("line_noScore", Double.valueOf(decimalFormat.format(count1 / jsonArray.length())));
+//        map.put("line_withScore", Double.valueOf(decimalFormat.format(count2 / jsonArray.length())));
+//        map.put("token_noScore", Double.valueOf(decimalFormat.format(count3 / jsonArray.length())));
+//        map.put("token_withScore", Double.valueOf(decimalFormat.format(count4 / jsonArray.length())));
+        //Rewrite in file.
+        DzyUtils.stringToBuildFile(jsonDirectory + jsonName, jsonArray.toString());
+        return map;
+    }
+
+    /**
+     * 计算 无上下文 和 切片上下文共享的个数
+     * @param jsonDirectory
+     * @param jsonName
+     * @return
+     * @throws IOException
+     * @throws JSONException
+     */
+    public Map<String, Double> countChatGPTMatchRateShare(String jsonDirectory, String jsonName, String jsonName1) throws IOException, JSONException {
+        logger.info("Get Match Rate Of ChatGPT Answer: {}", jsonName);
+        LinkedHashMap<String, Double> map = new LinkedHashMap<>();
+        map.put("line_no",0.0); map.put("line_withSlicing", 0.0); map.put("line_share", 0.0); map.put("token_no", 0.0); map.put("token_withSlicing", 0.0); map.put("token_share", 0.0);
+
+
+        // 插入 sciling
+        File file1 = new File(jsonDirectory + jsonName1);
+        String content1 = FileUtils.readFileToString(file1, "UTF-8");
+        JSONArray jsonArray1 = new JSONArray(content1);
+
+        File file = new File(jsonDirectory + jsonName);
+        String content = FileUtils.readFileToString(file, "UTF-8");
+        JSONArray jsonArray = new JSONArray(content);
+        double count1 = 0; double count2 = 0; double count3 = 0; double count4 = 0;
+        for (int i = 0; i < jsonArray.length(); i++){
+            //插入slicing
+            JSONObject curJson1 = jsonArray1.getJSONObject(i);
+
+            JSONObject curJson = jsonArray.getJSONObject(i);
+            String resolution2 = curJson1.getString("res_region");
+            String resolution = curJson1.getString("res_region_small");
+
+            double line_with_maxMatch = getMaxMatchInJSONArray(curJson1.getJSONArray("line_withpresuf_answer"), resolution);
+            double line_with_maxMatch2 = getMaxMatchInJSONArray(curJson1.getJSONArray("line_withpresuf_answer"), resolution2);
+            line_with_maxMatch = Math.max(line_with_maxMatch, line_with_maxMatch2);
+            double token_with_maxMatch = getMaxMatchInJSONArray(curJson1.getJSONArray("token_withpresuf_answer"), resolution);
+            double token_with_maxMatch2 = getMaxMatchInJSONArray(curJson1.getJSONArray("token_withpresuf_answer"), resolution2);
+            token_with_maxMatch = Math.max(token_with_maxMatch, token_with_maxMatch2);
+
+
+
+            double line_no_maxMatch = getMaxMatchInJSONArray(curJson.getJSONArray("line_noContext_answer"), resolution);
+            if(line_no_maxMatch == 100)  {
+                map.put("line_no", map.getOrDefault("line_no", 0.0) + 1);
+            }
+            curJson.put("line_no_maxMatch", line_no_maxMatch);
+
+//            double line_with_maxMatch = getMaxMatchInJSONArray(curJson1.getJSONArray("line_withpresuf_answer"), resolution); // line_with_SlicingContext_answer  line_withContext_answer  line_with_BM25Context_answer
+            if(line_with_maxMatch == 100)  {
+                map.put("line_withSlicing", map.getOrDefault("line_withSlicing", 0.0) + 1);
+            }
+            curJson.put("line_with_maxMatch", line_with_maxMatch);
+            //Count line share
+            if (line_no_maxMatch == 100 && line_with_maxMatch == 100) map.put("line_share", map.getOrDefault("line_share", 0.0) + 1);
+
+            double token_no_maxMatch = getMaxMatchInJSONArray(curJson.getJSONArray("token_noContext_answer"), resolution);
+            if(token_no_maxMatch == 100) {
+                map.put("token_no", map.getOrDefault("token_no", 0.0) + 1);
+            }
+            curJson.put("token_no_maxMatch", token_no_maxMatch);
+
+//            double token_with_maxMatch = getMaxMatchInJSONArray(curJson1.getJSONArray("token_withpresuf_answer"), resolution); // token_with_SlicingContext_answer token_withContext_answer  token_with_BM25Context_answer
+            if(token_with_maxMatch == 100) {
+                map.put("token_withSlicing", map.getOrDefault("token_withSlicing", 0.0) + 1);
+            }
+            curJson.put("token_with_maxMatch", token_with_maxMatch);
+            //Count token share
+            if (token_no_maxMatch == 100 && token_with_maxMatch == 100) map.put("token_share", map.getOrDefault("token_share", 0.0) + 1);
+            count1 += line_no_maxMatch; count2 += line_with_maxMatch; count3 += token_no_maxMatch; count4 += token_with_maxMatch;
+        }
+//        DecimalFormat decimalFormat = new DecimalFormat("#0.0000");
+//        map.put("line_noScore", Double.valueOf(decimalFormat.format(count1 / jsonArray.length())));
+//        map.put("line_withScore", Double.valueOf(decimalFormat.format(count2 / jsonArray.length())));
+//        map.put("token_noScore", Double.valueOf(decimalFormat.format(count3 / jsonArray.length())));
+//        map.put("token_withScore", Double.valueOf(decimalFormat.format(count4 / jsonArray.length())));
+        //Rewrite in file.
+//        DzyUtils.stringToBuildFile(jsonDirectory + jsonName, jsonArray.toString());
+        return map;
+    }
+
+    public Map<String, Double> countChatGPTMatchEveryType(String jsonDirectory, String jsonName) throws IOException, JSONException {
+        logger.info("Get Every Type Match Rate Of ChatGPT Answer: {}", jsonName);
+        LinkedHashMap<String, Double> map = new LinkedHashMap<>();
+
+        File file = new File(jsonDirectory + jsonName);
+        String content = FileUtils.readFileToString(file, "UTF-8");
+        JSONArray jsonArray = new JSONArray(content);
+
+        for (int i = 0; i < jsonArray.length(); i++){
+            JSONObject curJson = jsonArray.getJSONObject(i);
+            String resolution = curJson.getString("res_region");
+
+            double line_with_maxMatch = getMaxMatchInJSONArray(curJson.getJSONArray("line_noContext_answer"), resolution); // line_with_SlicingContext_answer  line_withContext_answer  line_with_BM25Context_answer
+            if(line_with_maxMatch == 100)  {
+                map.put(curJson.getString("res_label"), map.getOrDefault(curJson.getString("res_label"), 0.0) + 1);
+            }
+            curJson.put("line_with_maxMatch", line_with_maxMatch);
+        }
+
+        return map;
     }
 
 
+    public Map<String, Double> countChatGPTBleu4(String jsonDirectory, String jsonName) throws IOException, JSONException {
+        logger.info("Get Bleu4-Score Of ChatGPT Answer: {}", jsonName);
+        LinkedHashMap<String, Double> map = new LinkedHashMap<>();
+        map.put("line_no",0.0); map.put("line_withBM25", 0.0); map.put("token_no", 0.0); map.put("token_withBM25", 0.0);
 
+        File file = new File(jsonDirectory + jsonName);
+        String content = FileUtils.readFileToString(file, "UTF-8");
+        JSONArray jsonArray = new JSONArray(content);
 
+        for (int i = 0; i < jsonArray.length(); i++){
+            System.out.println("---------------------------------------------------------" + i);
+            JSONObject curJson = jsonArray.getJSONObject(i);
+            String resolution = curJson.getString("res_region");
+            String resolution2 = curJson.getString("res_region_small");
 
+            double line_with_maxMatch = getAllBleuInJSONArray(curJson.getJSONArray("line_withpresuf_answer"), resolution);
+            double line_with_maxMatch2 = getAllBleuInJSONArray(curJson.getJSONArray("line_withpresuf_answer"), resolution2);
+            line_with_maxMatch = Math.max(line_with_maxMatch, line_with_maxMatch2);
+            double token_with_maxMatch = getAllBleuInJSONArray(curJson.getJSONArray("token_withpresuf_answer"), resolution);
+            double token_with_maxMatch2 = getAllBleuInJSONArray(curJson.getJSONArray("token_withpresuf_answer"), resolution2);
+            token_with_maxMatch = Math.max(token_with_maxMatch, token_with_maxMatch2);
 
-    public static void main(String[] args) throws IOException, JSONException {
+//            double line_no_maxMatch = getAllBleuInJSONArray(curJson.getJSONArray("line_noContext_answer"), resolution);
+//            map.put("line_no", map.getOrDefault("line_no", 0.0) + line_no_maxMatch);
+
+//            double line_with_maxMatch = getAllBleuInJSONArray(curJson.getJSONArray("line_withpresuf_answer"), resolution); // line_with_SlicingContext_answer   line_with_BM25Context_answer  line_withContext_answer
+            map.put("line_withBM25", map.getOrDefault("line_withBM25", 0.0) + line_with_maxMatch);
+
+//            double token_no_maxMatch = getAllBleuInJSONArray(curJson.getJSONArray("token_noContext_answer"), resolution);
+//            map.put("token_no", map.getOrDefault("token_no", 0.0) + token_no_maxMatch);
+
+//            double token_with_maxMatch = getAllBleuInJSONArray(curJson.getJSONArray("token_withpresuf_answer"), resolution); // token_with_SlicingContext_answer   token_with_BM25Context_answer  token_withContext_answer
+            map.put("token_withBM25", map.getOrDefault("token_withBM25", 0.0) + token_with_maxMatch);
+
+        }
+        map.put("line_no", map.get("line_no") / jsonArray.length());
+        map.put("line_withBM25", map.get("line_withBM25") / jsonArray.length());
+        map.put("token_no", map.get("token_no") / jsonArray.length());
+        map.put("token_withBM25", map.get("token_withBM25") / jsonArray.length());
+
+        return map;
+    }
+
+    public Map<String, Double> countChatGPTMatchRatePreSuf(String jsonDirectory, String jsonName) throws IOException, JSONException {
+        logger.info("Get Match Rate Of ChatGPT Answer: {}", jsonName);
+        LinkedHashMap<String, Double> map = new LinkedHashMap<>();
+        map.put("line_with", 0.0); map.put("token_with", 0.0);
+
+        File file = new File(jsonDirectory + jsonName);
+        String content = FileUtils.readFileToString(file, "UTF-8");
+        JSONArray jsonArray = new JSONArray(content);
+        for (int i = 0; i < jsonArray.length(); i++){
+            JSONObject curJson = jsonArray.getJSONObject(i);
+            String resolution = curJson.getString("res_region");
+            String resolution2 = curJson.getString("res_region_small");
+
+            double line_with_maxMatch = getMaxMatchInJSONArray(curJson.getJSONArray("line_withpresuf_answer"), resolution);
+            double line_with_maxMatch2 = getMaxMatchInJSONArray(curJson.getJSONArray("line_withpresuf_answer"), resolution2);
+            line_with_maxMatch = Math.max(line_with_maxMatch, line_with_maxMatch2);
+
+            if(line_with_maxMatch == 100)  {
+                map.put("line_with", map.getOrDefault("line_with", 0.0) + 1);
+            }
+            curJson.put("line_withPS_maxMatch", line_with_maxMatch);
+
+            double token_with_maxMatch = getMaxMatchInJSONArray(curJson.getJSONArray("token_withpresuf_answer"), resolution);
+            double token_with_maxMatch2 = getMaxMatchInJSONArray(curJson.getJSONArray("token_withpresuf_answer"), resolution2);
+            token_with_maxMatch = Math.max(token_with_maxMatch, token_with_maxMatch2);
+
+            if(token_with_maxMatch == 100) {
+                map.put("token_with", map.getOrDefault("token_with", 0.0) + 1);
+            }
+            curJson.put("token_withPS_maxMatch", token_with_maxMatch);
+
+        }
+        //Rewrite in file.
+        DzyUtils.stringToBuildFile(jsonDirectory + jsonName, jsonArray.toString());
+        return map;
+    }
+
+    public Map<String, Integer> countChoiceMatchRate(String jsonDirectory, String jsonName) throws IOException, JSONException {
+
+        LinkedHashMap<String, Integer> map = new LinkedHashMap<>();
+        map.put("choose_a",0); map.put("choose_o", 0); map.put("choose_b", 0); map.put("choose_ab", 0); map.put("choose_ba", 0);
+
+        File file = new File(jsonDirectory + jsonName);
+        String content = FileUtils.readFileToString(file, "UTF-8");
+        JSONArray jsonArray = new JSONArray(content);
+        for (int i = 0; i < jsonArray.length(); i++){
+            JSONObject curJson = jsonArray.getJSONObject(i);
+            logger.info("Is Counting Numbers Of Conflict ID: {}", curJson.getInt("id"));
+
+            map.put("all", map.getOrDefault("all", 0) + 1);
+            String resolution = curJson.getString("res_region");
+
+            //2选1：读取数据并写入数据
+            double choose_a = DzyUtils.perfectMatchRate(curJson.getString("choose_a"), resolution);
+            if(choose_a == 100)  {
+                map.put("choose_a", map.getOrDefault("choose_a", 0) + 1);
+            }
+            curJson.put("choose_a_matchRate", choose_a);
+
+            double choose_o = DzyUtils.perfectMatchRate(curJson.getString("choose_o"), resolution);
+            if(choose_o == 100)  {
+                map.put("choose_o", map.getOrDefault("choose_o", 0) + 1);
+            }
+            curJson.put("choose_o_matchRate", choose_o);
+
+            double choose_b = DzyUtils.perfectMatchRate(curJson.getString("choose_b"), resolution);
+            if(choose_b == 100)  {
+                map.put("choose_b", map.getOrDefault("choose_b", 0) + 1);
+            }
+            curJson.put("choose_b_matchRate", choose_b);
+
+            double choose_ab = DzyUtils.perfectMatchRate(curJson.getString("choose_ab"), resolution);
+            if(choose_ab == 100)  {
+                map.put("choose_ab", map.getOrDefault("choose_ab", 0) + 1);
+            }
+            curJson.put("choose_ab_matchRate", choose_ab);
+
+            double choose_ba = DzyUtils.perfectMatchRate(curJson.getString("choose_ba"), resolution);
+            if(choose_ba == 100)  {
+                map.put("choose_ba", map.getOrDefault("choose_ba", 0) + 1);
+            }
+            curJson.put("choose_ba_matchRate", choose_ba);
+
+            //2选1：读取数据
+//            Double choose_a = curJson.getDouble("choose_a_matchRate");
+//            if(choose_a == 100)  {
+//                map.put("choose_a", map.getOrDefault("choose_a", 0) + 1);
+//            }
+////            Double choose_o = curJson.getDouble("choose_o_matchRate");
+////            if(choose_o == 100)  {
+////                map.put("choose_o", map.getOrDefault("choose_o", 0) + 1);
+////            }
+//            Double choose_b = curJson.getDouble("choose_b_matchRate");
+//            if(choose_b == 100)  {
+//                map.put("choose_b", map.getOrDefault("choose_b", 0) + 1);
+//            }
+//            Double choose_ab = curJson.getDouble("choose_ab_matchRate");
+//            if(choose_ab == 100)  {
+//                map.put("choose_ab", map.getOrDefault("choose_ab", 0) + 1);
+//            }
+//            Double choose_ba = curJson.getDouble("choose_ba_matchRate");
+//            if(choose_ba == 100)  {
+//                map.put("choose_ba", map.getOrDefault("choose_ba", 0) + 1);
+//            }
+
+            if (choose_a == 100 ||  choose_b == 100 || choose_o == 100 || choose_ab == 100 || choose_ba == 100) map.put("perfect_all", map.getOrDefault("perfect_all", 0) + 1);
+
+        }
+        //Rewrite in file.
+        DzyUtils.stringToBuildFile(jsonDirectory + jsonName, jsonArray.toString());
+        return map;
+    }
+
+    /**
+     *  --------------------------------------------------------------------main--------------------------------------------------------------------
+     */
+    public static void main(String[] args) throws Exception {
         DatasetCollector collector = new DatasetCollector();
-        //collector.getConflictFromJson("G:\\now\\2024merge\\ChatGPTResearch\\exampleData\\acceptA\\100004_metadata.json");
 
-        String dir = "G:\\now\\2024merge\\ChatGPTResearch\\exampleData\\acceptA\\";
-        String dirB = "G:\\now\\2024merge\\ChatGPTResearch\\exampleData\\acceptB\\";
-        String dirBA = "G:\\now\\2024merge\\ChatGPTResearch\\exampleData\\acceptBA\\";
-//        collector.fromTupleToTokenDiff(dir, "100004_metadata.json");
-//        collector.fromTupleToTokenDiff(dir, "100034_metadata.json");
-//        collector.fromTupleToTokenDiff(dirB, "106855_metadata.json");
-        collector.fromTupleToTokenDiff(dirBA, "101216_metadata.json");
-        collector.fromTupleToTokenDiff(dirBA, "140328_metadata.json");
+        Map<String, Double> map = collector.countChatGPTMatchRate(
+                "G:/now/2024merge/mergeMinePython/output/mergeBert_Output/",
+                "100_filtered_v2_only.json");
+        System.out.println(map);
 
-//        System.out.println(collector.tokenize("/**\n" +
-//                "     * Select an actor in a Human task in the list of Process Actor\n" +
-//                "     *"));
-//        System.out.println(collector.newTokenizer("/**\n" +
-//                "     * Select an actor in a Human task in the list of Process Actor\n" +
-//                "     *"));
+        //Count ChatGPT Answer Match Rate V1
+//        Map<String, Integer> map = collector.countChatGPTMatchRate("G:/now/2024merge/mergeMinePython/json/","100_filtered_v1.json");
+//        System.out.println(map);
+        //Count ChatGPT Answer Match Rate V2
+//        Map<String, Double> map = collector.countChatGPTMatchRate("G:/now/2024merge/mergeMinePython/backup/2Result_35/","100_filtered_v2.json");
+//        Map<String, Double> map1 = collector.countChatGPTMatchRate("G:/now/2024merge/mergeMinePython/output/mergeBert_Output/","100_filtered_v1_COT.json");
+//        Map<String, Double> map2 = collector.countChatGPTMatchRate("G:/now/2024merge/mergeMinePython/output/mergeBert_Output/","100_filtered_v2_COT.json");
+//        Map<String, Double> map3 = collector.countChatGPTMatchRate("G:/now/2024merge/mergeMinePython/output/mergeBert_Output/","100_filtered_v3_COT.json");
+//        System.out.println(map1);
+//        System.out.println(map2);
+//        System.out.println(map3);
 
-
-        /**
-         * 演示 1 tokenize 与 newTokenizer 区别
-         */
-//        String codeLines = "Platform.runLater(() -> {\n" +
-//                "            //if there is an existing prompt or progressdialog,...\n" +
-//                "            if (promptDialogManager.bringCurrentDialogToFront()) {\n" +
-//                "                //... just show that\n" +
-//                "            } else {\n" +
-//                "\n" +
-//                "                if ( //confirm timeline during ingest\n" +
-//                "                        IngestManager.getInstance().isIngestRunning()\n" +
-//                "                        && promptDialogManager.confirmDuringIngest() == false) {\n" +
-//                "                    return;  //if they cancel, do nothing.\n" +
-//                "                }";
-//        System.out.println(collector.tokenize(codeLines));
-//        System.out.println("------------------------------------------------------------------------------------------------------------------------------");
-//        System.out.println(collector.newTokenizer(codeLines));
+//        Map<String, Double> map = collector.countChatGPTMatchRate("G:/now/2024merge/mergeMinePython/output/","100_filtered_v2_only.json");
+//        System.out.println(map);
+//        Map<String, Integer> map = collector.countChoiceMatchRate("G:/now/2024merge/mergeMinePython/output/type_Output/","mergeBertClassifierNoLineLevel.json");
+//        System.out.println(map);
 
 
+//        Map<String, Integer> map = collector.rewriteMatchRate("G:\\now\\2024merge\\MergeBERT_Data\\fse2022\\automated-analysis-data\\Java\\json\\", "javaPrettyVersion3.json");
+//        System.out.println(map);
+//        Map<String, Integer> map = collector.countPerfectFromJson("G:\\now\\2024merge\\MergeBERT_Data\\fse2022\\automated-analysis-data\\Java\\json\\", "javaPrettyVersion3.json");
+//        System.out.println(map);
+
+        //Count Numbers Of Resolution Label
+        //Map<String, Integer> map = collector.countNumFromPrettyJson("G:\\now\\2024merge\\MergeBERT_Data\\fse2022\\automated-analysis-data\\Java\\json\\", "javaContextPrettyVersionAll2.json");
+//        Map<String, Integer> map = collector.countPerfectFromJson("G:/now/2024merge/mergeMinePython/json/", "javaContextPrettyVersionAll2.json");
+//        System.out.println(map);
+
+        //Generate Json File.
+//        collector.allTuplesToTokenDiff(JavaDirectory, "javaContextVersion2.json");//maxLine <= 5
+//        collector.allTuplesToTokenDiff("G:\\now\\2024merge\\ChatGPTResearch\\exampleData\\acceptA\\", "acceptA.json");
+
+//        System.out.println(DzyUtils.perfectMatchRate("\nSample sample = start();\n", "        Sample sample = start();\n"));
     }
 
 }
