@@ -343,8 +343,8 @@ public class DatasetCollector {
 
     private double getMaxMatchInJSONArray(JSONArray answers, String resolution){// Be Used by last
         double maxMatchRate = 0.0;
-        for (int k = 0; k < answers.length(); k++) { // 遍历所有答案的效果
-//        for (int k = 0; k < 3; k++) { // 只遍历前3个答案的效果
+//        for (int k = 0; k < answers.length(); k++) { // 遍历所有答案的效果
+        for (int k = 0; k < 3; k++) { // 只遍历前3个答案的效果
             String currentAnswer = (String) answers.get(k);
             double currentMatchRate = DzyUtils.perfectMatchRate(currentAnswer, resolution);
             maxMatchRate = Math.max(maxMatchRate, currentMatchRate);
@@ -352,12 +352,33 @@ public class DatasetCollector {
         return maxMatchRate;
     }
 
+    private double getAllBleuInJSONArray(JSONArray answers, String resolution){// Be Used by last
+        double sumBleu = 0.0;
+//        for (int k = 0; k < answers.length(); k++) { // 遍历所有答案的效果
+        for (int k = 0; k < 3; k++) { // 只遍历前3个答案的效果
+            String currentAnswer = DzyUtils.newTokenizerToString((String) answers.get(k));
+
+            List<String> referenceResolution = new ArrayList<>(List.of(DzyUtils.newTokenizerToString(resolution)));
+            double bleuScore = DzyUtils.computeBLEU(currentAnswer, referenceResolution);
+            if (Double.isNaN(bleuScore)){
+                bleuScore = 0.0;
+            }
+            int temp = k + 1;
+            System.out.println("BLEU-4 Score " + temp + ": " + bleuScore);
+
+            sumBleu += bleuScore;
+        }
+        System.out.println("------------Sum of BLEU-4 Score: " + sumBleu);
+//        return sumBleu / answers.length();
+        return sumBleu / 3;
+    }
+
     public Map<String, Double> countChatGPTMatchRate(String jsonDirectory, String jsonName) throws IOException, JSONException {
         logger.info("Get Match Rate Of ChatGPT Answer: {}", jsonName);
         LinkedHashMap<String, Double> map = new LinkedHashMap<>();
-        map.put("line_no",0.0); map.put("line_with", 0.0); map.put("line_share", 0.0); map.put("token_no", 0.0); map.put("token_with", 0.0); map.put("token_share", 0.0); map.put("all_share", 0.0);
+        map.put("line_no",0.0); map.put("line_withSlicing", 0.0); map.put("line_share", 0.0); map.put("token_no", 0.0); map.put("token_withSlicing", 0.0); map.put("token_share", 0.0); map.put("all_share", 0.0);
 
-                File file = new File(jsonDirectory + jsonName);
+        File file = new File(jsonDirectory + jsonName);
         String content = FileUtils.readFileToString(file, "UTF-8");
         JSONArray jsonArray = new JSONArray(content);
         double count1 = 0; double count2 = 0; double count3 = 0; double count4 = 0;
@@ -371,9 +392,9 @@ public class DatasetCollector {
             }
             curJson.put("line_no_maxMatch", line_no_maxMatch);
 
-            double line_with_maxMatch = getMaxMatchInJSONArray(curJson.getJSONArray("line_withContext_answer"), resolution);
+            double line_with_maxMatch = getMaxMatchInJSONArray(curJson.getJSONArray("line_with_BM25Context_answer"), resolution); // line_with_SlicingContext_answer  line_withContext_answer  line_with_BM25Context_answer
             if(line_with_maxMatch == 100)  {
-                map.put("line_with", map.getOrDefault("line_with", 0.0) + 1);
+                map.put("line_withSlicing", map.getOrDefault("line_withSlicing", 0.0) + 1);
             }
             curJson.put("line_with_maxMatch", line_with_maxMatch);
             //Count line share
@@ -385,9 +406,9 @@ public class DatasetCollector {
             }
             curJson.put("token_no_maxMatch", token_no_maxMatch);
 
-            double token_with_maxMatch = getMaxMatchInJSONArray(curJson.getJSONArray("token_withContext_answer"), resolution);
+            double token_with_maxMatch = getMaxMatchInJSONArray(curJson.getJSONArray("token_with_BM25Context_answer"), resolution); // token_with_SlicingContext_answer token_withContext_answer  token_with_BM25Context_answer
             if(token_with_maxMatch == 100) {
-                map.put("token_with", map.getOrDefault("token_with", 0.0) + 1);
+                map.put("token_withSlicing", map.getOrDefault("token_withSlicing", 0.0) + 1);
             }
             curJson.put("token_with_maxMatch", token_with_maxMatch);
             //Count token share
@@ -404,7 +425,152 @@ public class DatasetCollector {
 //        map.put("token_noScore", Double.valueOf(decimalFormat.format(count3 / jsonArray.length())));
 //        map.put("token_withScore", Double.valueOf(decimalFormat.format(count4 / jsonArray.length())));
         //Rewrite in file.
+        DzyUtils.stringToBuildFile(jsonDirectory + jsonName, jsonArray.toString());
+        return map;
+    }
+
+    /**
+     * 计算 无上下文 和 切片上下文共享的个数
+     * @param jsonDirectory
+     * @param jsonName
+     * @return
+     * @throws IOException
+     * @throws JSONException
+     */
+    public Map<String, Double> countChatGPTMatchRateShare(String jsonDirectory, String jsonName, String jsonName1) throws IOException, JSONException {
+        logger.info("Get Match Rate Of ChatGPT Answer: {}", jsonName);
+        LinkedHashMap<String, Double> map = new LinkedHashMap<>();
+        map.put("line_no",0.0); map.put("line_withSlicing", 0.0); map.put("line_share", 0.0); map.put("token_no", 0.0); map.put("token_withSlicing", 0.0); map.put("token_share", 0.0);
+
+
+        // 插入 sciling
+        File file1 = new File(jsonDirectory + jsonName1);
+        String content1 = FileUtils.readFileToString(file1, "UTF-8");
+        JSONArray jsonArray1 = new JSONArray(content1);
+
+        File file = new File(jsonDirectory + jsonName);
+        String content = FileUtils.readFileToString(file, "UTF-8");
+        JSONArray jsonArray = new JSONArray(content);
+        double count1 = 0; double count2 = 0; double count3 = 0; double count4 = 0;
+        for (int i = 0; i < jsonArray.length(); i++){
+            //插入slicing
+            JSONObject curJson1 = jsonArray1.getJSONObject(i);
+
+            JSONObject curJson = jsonArray.getJSONObject(i);
+            String resolution2 = curJson1.getString("res_region");
+            String resolution = curJson1.getString("res_region_small");
+
+            double line_with_maxMatch = getMaxMatchInJSONArray(curJson1.getJSONArray("line_withpresuf_answer"), resolution);
+            double line_with_maxMatch2 = getMaxMatchInJSONArray(curJson1.getJSONArray("line_withpresuf_answer"), resolution2);
+            line_with_maxMatch = Math.max(line_with_maxMatch, line_with_maxMatch2);
+            double token_with_maxMatch = getMaxMatchInJSONArray(curJson1.getJSONArray("token_withpresuf_answer"), resolution);
+            double token_with_maxMatch2 = getMaxMatchInJSONArray(curJson1.getJSONArray("token_withpresuf_answer"), resolution2);
+            token_with_maxMatch = Math.max(token_with_maxMatch, token_with_maxMatch2);
+
+
+
+            double line_no_maxMatch = getMaxMatchInJSONArray(curJson.getJSONArray("line_noContext_answer"), resolution);
+            if(line_no_maxMatch == 100)  {
+                map.put("line_no", map.getOrDefault("line_no", 0.0) + 1);
+            }
+            curJson.put("line_no_maxMatch", line_no_maxMatch);
+
+//            double line_with_maxMatch = getMaxMatchInJSONArray(curJson1.getJSONArray("line_withpresuf_answer"), resolution); // line_with_SlicingContext_answer  line_withContext_answer  line_with_BM25Context_answer
+            if(line_with_maxMatch == 100)  {
+                map.put("line_withSlicing", map.getOrDefault("line_withSlicing", 0.0) + 1);
+            }
+            curJson.put("line_with_maxMatch", line_with_maxMatch);
+            //Count line share
+            if (line_no_maxMatch == 100 && line_with_maxMatch == 100) map.put("line_share", map.getOrDefault("line_share", 0.0) + 1);
+
+            double token_no_maxMatch = getMaxMatchInJSONArray(curJson.getJSONArray("token_noContext_answer"), resolution);
+            if(token_no_maxMatch == 100) {
+                map.put("token_no", map.getOrDefault("token_no", 0.0) + 1);
+            }
+            curJson.put("token_no_maxMatch", token_no_maxMatch);
+
+//            double token_with_maxMatch = getMaxMatchInJSONArray(curJson1.getJSONArray("token_withpresuf_answer"), resolution); // token_with_SlicingContext_answer token_withContext_answer  token_with_BM25Context_answer
+            if(token_with_maxMatch == 100) {
+                map.put("token_withSlicing", map.getOrDefault("token_withSlicing", 0.0) + 1);
+            }
+            curJson.put("token_with_maxMatch", token_with_maxMatch);
+            //Count token share
+            if (token_no_maxMatch == 100 && token_with_maxMatch == 100) map.put("token_share", map.getOrDefault("token_share", 0.0) + 1);
+            count1 += line_no_maxMatch; count2 += line_with_maxMatch; count3 += token_no_maxMatch; count4 += token_with_maxMatch;
+        }
+//        DecimalFormat decimalFormat = new DecimalFormat("#0.0000");
+//        map.put("line_noScore", Double.valueOf(decimalFormat.format(count1 / jsonArray.length())));
+//        map.put("line_withScore", Double.valueOf(decimalFormat.format(count2 / jsonArray.length())));
+//        map.put("token_noScore", Double.valueOf(decimalFormat.format(count3 / jsonArray.length())));
+//        map.put("token_withScore", Double.valueOf(decimalFormat.format(count4 / jsonArray.length())));
+        //Rewrite in file.
 //        DzyUtils.stringToBuildFile(jsonDirectory + jsonName, jsonArray.toString());
+        return map;
+    }
+
+    public Map<String, Double> countChatGPTMatchEveryType(String jsonDirectory, String jsonName) throws IOException, JSONException {
+        logger.info("Get Every Type Match Rate Of ChatGPT Answer: {}", jsonName);
+        LinkedHashMap<String, Double> map = new LinkedHashMap<>();
+
+        File file = new File(jsonDirectory + jsonName);
+        String content = FileUtils.readFileToString(file, "UTF-8");
+        JSONArray jsonArray = new JSONArray(content);
+
+        for (int i = 0; i < jsonArray.length(); i++){
+            JSONObject curJson = jsonArray.getJSONObject(i);
+            String resolution = curJson.getString("res_region");
+
+            double line_with_maxMatch = getMaxMatchInJSONArray(curJson.getJSONArray("line_noContext_answer"), resolution); // line_with_SlicingContext_answer  line_withContext_answer  line_with_BM25Context_answer
+            if(line_with_maxMatch == 100)  {
+                map.put(curJson.getString("res_label"), map.getOrDefault(curJson.getString("res_label"), 0.0) + 1);
+            }
+            curJson.put("line_with_maxMatch", line_with_maxMatch);
+        }
+
+        return map;
+    }
+
+
+    public Map<String, Double> countChatGPTBleu4(String jsonDirectory, String jsonName) throws IOException, JSONException {
+        logger.info("Get Bleu4-Score Of ChatGPT Answer: {}", jsonName);
+        LinkedHashMap<String, Double> map = new LinkedHashMap<>();
+        map.put("line_no",0.0); map.put("line_withBM25", 0.0); map.put("token_no", 0.0); map.put("token_withBM25", 0.0);
+
+        File file = new File(jsonDirectory + jsonName);
+        String content = FileUtils.readFileToString(file, "UTF-8");
+        JSONArray jsonArray = new JSONArray(content);
+
+        for (int i = 0; i < jsonArray.length(); i++){
+            System.out.println("---------------------------------------------------------" + i);
+            JSONObject curJson = jsonArray.getJSONObject(i);
+            String resolution = curJson.getString("res_region");
+            String resolution2 = curJson.getString("res_region_small");
+
+            double line_with_maxMatch = getAllBleuInJSONArray(curJson.getJSONArray("line_withpresuf_answer"), resolution);
+            double line_with_maxMatch2 = getAllBleuInJSONArray(curJson.getJSONArray("line_withpresuf_answer"), resolution2);
+            line_with_maxMatch = Math.max(line_with_maxMatch, line_with_maxMatch2);
+            double token_with_maxMatch = getAllBleuInJSONArray(curJson.getJSONArray("token_withpresuf_answer"), resolution);
+            double token_with_maxMatch2 = getAllBleuInJSONArray(curJson.getJSONArray("token_withpresuf_answer"), resolution2);
+            token_with_maxMatch = Math.max(token_with_maxMatch, token_with_maxMatch2);
+
+//            double line_no_maxMatch = getAllBleuInJSONArray(curJson.getJSONArray("line_noContext_answer"), resolution);
+//            map.put("line_no", map.getOrDefault("line_no", 0.0) + line_no_maxMatch);
+
+//            double line_with_maxMatch = getAllBleuInJSONArray(curJson.getJSONArray("line_withpresuf_answer"), resolution); // line_with_SlicingContext_answer   line_with_BM25Context_answer  line_withContext_answer
+            map.put("line_withBM25", map.getOrDefault("line_withBM25", 0.0) + line_with_maxMatch);
+
+//            double token_no_maxMatch = getAllBleuInJSONArray(curJson.getJSONArray("token_noContext_answer"), resolution);
+//            map.put("token_no", map.getOrDefault("token_no", 0.0) + token_no_maxMatch);
+
+//            double token_with_maxMatch = getAllBleuInJSONArray(curJson.getJSONArray("token_withpresuf_answer"), resolution); // token_with_SlicingContext_answer   token_with_BM25Context_answer  token_withContext_answer
+            map.put("token_withBM25", map.getOrDefault("token_withBM25", 0.0) + token_with_maxMatch);
+
+        }
+        map.put("line_no", map.get("line_no") / jsonArray.length());
+        map.put("line_withBM25", map.get("line_withBM25") / jsonArray.length());
+        map.put("token_no", map.get("token_no") / jsonArray.length());
+        map.put("token_withBM25", map.get("token_withBM25") / jsonArray.length());
+
         return map;
     }
 
@@ -416,7 +582,6 @@ public class DatasetCollector {
         File file = new File(jsonDirectory + jsonName);
         String content = FileUtils.readFileToString(file, "UTF-8");
         JSONArray jsonArray = new JSONArray(content);
-        double count1 = 0; double count2 = 0; double count3 = 0; double count4 = 0;
         for (int i = 0; i < jsonArray.length(); i++){
             JSONObject curJson = jsonArray.getJSONObject(i);
             String resolution = curJson.getString("res_region");
@@ -527,6 +692,11 @@ public class DatasetCollector {
      */
     public static void main(String[] args) throws Exception {
         DatasetCollector collector = new DatasetCollector();
+
+        Map<String, Double> map = collector.countChatGPTMatchRate(
+                "G:/now/2024merge/mergeMinePython/output/mergeBert_Output/",
+                "100_filtered_v2_only.json");
+        System.out.println(map);
 
         //Count ChatGPT Answer Match Rate V1
 //        Map<String, Integer> map = collector.countChatGPTMatchRate("G:/now/2024merge/mergeMinePython/json/","100_filtered_v1.json");

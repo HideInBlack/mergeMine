@@ -134,19 +134,18 @@ public class KeyContextCollector {
 
     public static void main(String[] args) throws Exception {
         //获取key Information
-        List<Map<String, String>> keyInfo3 = KeyInformationCollector.extractTokenTuples("G:\\now\\2024merge\\ChatGPTResearch\\exampleData\\acceptA\\100004_3_merged.txt");
-        List<Map<String, String>> keyInfo4 = KeyInformationCollector.extractTokenTuples("G:\\now\\2024merge\\ChatGPTResearch\\exampleData\\acceptA\\100004_4_merged.txt");
-        List<Map<String, String>> keyInfo5 = KeyInformationCollector.extractTokenTuples("G:\\now\\2024merge\\ChatGPTResearch\\exampleData\\acceptA\\100004_5_merged.txt");
-        String mergedJava = "G:\\now\\2024merge\\ChatGPTResearch\\exampleData\\acceptA\\100004_merged.java";
+        List<Map<String, String>> keyInfo1 = KeyInformationCollector.extractTokenTuples("G:\\now\\2024merge\\MergeBERT_Data\\ChatGPTResearch\\exampleData\\acceptA\\100004_3_merged.txt");
+        List<Map<String, String>> keyInfo2 = KeyInformationCollector.extractTokenTuples("G:\\now\\2024merge\\MergeBERT_Data\\ChatGPTResearch\\exampleData\\acceptA\\100004_4_merged.txt");
+
+        String mergedJava = "G:\\now\\2024merge\\MergeBERT_Data\\ChatGPTResearch\\exampleData\\acceptA\\100004_merged.java";
         //创建索引文件
         Analyzer analyzer = new StandardAnalyzer();
         Directory directory = createBM25(mergedJava, analyzer);
         //使用索引查询
-        System.out.println(useBM25(directory, keyInfo3, 1, analyzer));
+        System.out.println(useBM25(directory, keyInfo1, 1, analyzer));
         System.out.println("------------------------------------------------------------------------------------------------");
-        System.out.println(useBM25(directory, keyInfo4, 1, analyzer));
-        System.out.println("------------------------------------------------------------------------------------------------");
-        System.out.println(useBM25(directory, keyInfo5, 1, analyzer));
+        System.out.println(useBM25(directory, keyInfo2, 1, analyzer));
+
         directory.close();
 
     }

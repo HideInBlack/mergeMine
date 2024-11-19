@@ -308,8 +308,15 @@ public class Dataset50Collector {
 
 //        Map<String, Double> map = datasetCollector.countChatGPTMatchRate("G:/now/2024merge/mergeMinePython/output/50Repo_Output/","50_100v1_COT_presuf.json");
 //        System.out.println(map);
-        Map<String, Double> map = datasetCollector.countChatGPTMatchRatePreSuf("G:/now/2024merge/mergeMinePython/output/50Repo_Output/","50_100v2_COT_presuf.json");
+        Map<String, Double> map = datasetCollector.countChatGPTMatchRateShare(
+                "G:/now/2024merge/mergeMinePython/output/50Repo_Output/",
+                "50_500v3_COT.json", "50_500v3_presuf.json"); // 50_500v1_slicing.json
         System.out.println(map);
+
+//        Map<String, Double> map = datasetCollector.countChatGPTBleu4(
+//                "G:/now/2024merge/mergeMinePython/output/50Repo_Output/",
+//                "50_500v3_presuf.json");
+//        System.out.println(map);
 
 //        Map<String, Integer> labels = datasetCollector.countNumFromPrettyJson("G:\\now\\2024merge\\Merge50Repo_Data\\jsonAll\\", "50RepoV1Pretty.json");
 //        System.out.println(labels);
