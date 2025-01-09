@@ -358,7 +358,8 @@ public class DatasetCollector {
         for (int k = 0; k < 3; k++) { // 只遍历前3个答案的效果
             String currentAnswer = DzyUtils.newTokenizerToString((String) answers.get(k));
 
-            List<String> referenceResolution = new ArrayList<>(List.of(DzyUtils.newTokenizerToString(resolution)));
+//            List<String> referenceResolution = new ArrayList<>(List.of(DzyUtils.newTokenizerToString(resolution)));
+            List<String> referenceResolution = new ArrayList<>(Arrays.asList(DzyUtils.newTokenizerToString(resolution)));
             double bleuScore = DzyUtils.computeBLEU(currentAnswer, referenceResolution);
             if (Double.isNaN(bleuScore)){
                 bleuScore = 0.0;
@@ -392,32 +393,34 @@ public class DatasetCollector {
             }
             curJson.put("line_no_maxMatch", line_no_maxMatch);
 
-            double line_with_maxMatch = getMaxMatchInJSONArray(curJson.getJSONArray("line_with_BM25Context_answer"), resolution); // line_with_SlicingContext_answer  line_withContext_answer  line_with_BM25Context_answer
+            double line_with_maxMatch = getMaxMatchInJSONArray(curJson.getJSONArray("line_with_SlicingContext_answer"), resolution); // line_with_SlicingContext_answer  line_withContext_answer  line_with_BM25Context_answer
             if(line_with_maxMatch == 100)  {
                 map.put("line_withSlicing", map.getOrDefault("line_withSlicing", 0.0) + 1);
             }
             curJson.put("line_with_maxMatch", line_with_maxMatch);
+
             //Count line share
             if (line_no_maxMatch == 100 && line_with_maxMatch == 100) map.put("line_share", map.getOrDefault("line_share", 0.0) + 1);
 
-            double token_no_maxMatch = getMaxMatchInJSONArray(curJson.getJSONArray("token_noContext_answer"), resolution);
-            if(token_no_maxMatch == 100) {
-                map.put("token_no", map.getOrDefault("token_no", 0.0) + 1);
-            }
-            curJson.put("token_no_maxMatch", token_no_maxMatch);
-
-            double token_with_maxMatch = getMaxMatchInJSONArray(curJson.getJSONArray("token_with_BM25Context_answer"), resolution); // token_with_SlicingContext_answer token_withContext_answer  token_with_BM25Context_answer
-            if(token_with_maxMatch == 100) {
-                map.put("token_withSlicing", map.getOrDefault("token_withSlicing", 0.0) + 1);
-            }
-            curJson.put("token_with_maxMatch", token_with_maxMatch);
+//            double token_no_maxMatch = getMaxMatchInJSONArray(curJson.getJSONArray("token_noContext_answer"), resolution);
+//            if(token_no_maxMatch == 100) {
+//                map.put("token_no", map.getOrDefault("token_no", 0.0) + 1);
+//            }
+//            curJson.put("token_no_maxMatch", token_no_maxMatch);
+//
+//            double token_with_maxMatch = getMaxMatchInJSONArray(curJson.getJSONArray("token_with_BM25Context_answer"), resolution); // token_with_SlicingContext_answer token_withContext_answer  token_with_BM25Context_answer
+//            if(token_with_maxMatch == 100) {
+//                map.put("token_withSlicing", map.getOrDefault("token_withSlicing", 0.0) + 1);
+//            }
+//            curJson.put("token_with_maxMatch", token_with_maxMatch);
             //Count token share
-            if (token_no_maxMatch == 100 && token_with_maxMatch == 100) map.put("token_share", map.getOrDefault("token_share", 0.0) + 1);
-
-            if (token_no_maxMatch == 100 && token_with_maxMatch == 100 && line_no_maxMatch == 100 && line_with_maxMatch == 100) map.put("all_share", map.getOrDefault("all_share", 0.0) + 1);
-            if (token_no_maxMatch == 100 || token_with_maxMatch == 100 || line_no_maxMatch == 100 || line_with_maxMatch == 100) map.put("all", map.getOrDefault("all", 0.0) + 1);
-            if ((token_no_maxMatch == 100 || token_with_maxMatch == 100) && (line_no_maxMatch == 100 || line_with_maxMatch == 100)) map.put("left_right", map.getOrDefault("left_right", 0.0) + 1);
-            count1 += line_no_maxMatch; count2 += line_with_maxMatch; count3 += token_no_maxMatch; count4 += token_with_maxMatch;
+//            if (token_no_maxMatch == 100 && token_with_maxMatch == 100) map.put("token_share", map.getOrDefault("token_share", 0.0) + 1);
+//
+//            if (token_no_maxMatch == 100 && token_with_maxMatch == 100 && line_no_maxMatch == 100 && line_with_maxMatch == 100) map.put("all_share", map.getOrDefault("all_share", 0.0) + 1);
+//            if (token_no_maxMatch == 100 || token_with_maxMatch == 100 || line_no_maxMatch == 100 || line_with_maxMatch == 100) map.put("all", map.getOrDefault("all", 0.0) + 1);
+//            if ((token_no_maxMatch == 100 || token_with_maxMatch == 100) && (line_no_maxMatch == 100 || line_with_maxMatch == 100)) map.put("left_right", map.getOrDefault("left_right", 0.0) + 1);
+            count1 += line_no_maxMatch; count2 += line_with_maxMatch;
+//            count3 += token_no_maxMatch; count4 += token_with_maxMatch;
         }
 //        DecimalFormat decimalFormat = new DecimalFormat("#0.0000");
 //        map.put("line_noScore", Double.valueOf(decimalFormat.format(count1 / jsonArray.length())));

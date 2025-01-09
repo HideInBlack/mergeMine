@@ -292,7 +292,6 @@ public class Dataset50Collector {
 //        System.out.println(inRepo);
 //        System.out.println(dataset50Collector.countTokenInLine("G:\\now\\2024merge\\mergeMinePython\\json\\mergeBert\\", "javaContextPrettyVersionAll2.json"));//G:\now\2024merge\mergeMinePython\json\mergeBert\javaContextPrettyVersionAll2.json
 
-
         DatasetCollector datasetCollector = new DatasetCollector();
 //        Map<String, Integer> map = datasetCollector.countChoiceMatchRate("G:/now/2024merge/mergeMinePython/output/type_Output/","50RepoClassifierNoLine.json");
 //        System.out.println(map);
@@ -306,12 +305,14 @@ public class Dataset50Collector {
 //        System.out.println("MergeBERT2:" + map2);
 //        System.out.println("MergeBERT3:" + map3);
 
-//        Map<String, Double> map = datasetCollector.countChatGPTMatchRate("G:/now/2024merge/mergeMinePython/output/50Repo_Output/","50_100v1_COT_presuf.json");
-//        System.out.println(map);
-        Map<String, Double> map = datasetCollector.countChatGPTMatchRateShare(
-                "G:/now/2024merge/mergeMinePython/output/50Repo_Output/",
-                "50_500v3_COT.json", "50_500v3_presuf.json"); // 50_500v1_slicing.json
+        Map<String, Double> map = datasetCollector.countChatGPTMatchRate(
+                "F:\\spaceLearn\\research\\mergeMinePython\\output\\50Repo_Output\\tencent\\",
+                "HY_50_500v1_slicing.json"); // QW_coder32B_50_500v1_slicing.json
         System.out.println(map);
+//        Map<String, Double> map = datasetCollector.countChatGPTMatchRateShare(
+//                "G:/now/2024merge/mergeMinePython/output/50Repo_Output/",
+//                "50_500v3_COT.json", "50_500v3_presuf.json"); // 50_500v1_slicing.json
+//        System.out.println(map);
 
 //        Map<String, Double> map = datasetCollector.countChatGPTBleu4(
 //                "G:/now/2024merge/mergeMinePython/output/50Repo_Output/",
@@ -322,7 +323,6 @@ public class Dataset50Collector {
 //        System.out.println(labels);
 //        Map<String, Integer> countPerfectNotNull = datasetCollector.countPerfectFromJson("G:\\now\\2024merge\\Merge50Repo_Data\\jsonAll\\", "50RepoV1Pretty.json");
 //        System.out.println(countPerfectNotNull);
-
     }
 
 }
