@@ -102,6 +102,13 @@
       <version>3.37.0</version>
     </dependency>
 
+    <dependency>
+      <groupId>io.github.tree-sitter</groupId>
+      <artifactId>ktreesitter</artifactId>
+      <version>0.24.0</version>
+    </dependency>
+
+
 
   </dependencies>
 
